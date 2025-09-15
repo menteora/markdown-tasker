@@ -38,3 +38,9 @@ export interface Project {
   startLine: number;
   endLine: number;
 }
+
+export interface Settings {
+  senderName: string;
+  emailPreamble: string;
+  emailPostamble: string;
+}

@@ -1,6 +1,7 @@
-import React from 'react';
-import type { User, Task, GroupedTasks } from '../types';
+import React, { useState } from 'react';
+import type { User, Task, GroupedTasks, Settings } from '../types';
 import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2 } from 'lucide-react';
+import ConfirmationModal from './ConfirmationModal';
 
 const parseInlineMarkdown = (text: string): React.ReactNode[] => {
   const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);
@@ -33,6 +34,8 @@ interface ProjectOverviewProps {
   projectTitle: string;
   viewScope: ViewScope;
   totalCost: number;
+  settings: Settings;
+  onAddBulkTaskUpdates: (taskLineIndexes: number[], updateText: string) => void;
 }
 
 const TaskItem: React.FC<{ task: Task; viewScope: ViewScope }> = ({ task, viewScope }) => (
@@ -73,14 +76,22 @@ const ProgressBar: React.FC<{ value: number }> = ({ value }) => (
   </div>
 );
 
-const UserTaskCard: React.FC<{ user: User; tasks: Task[]; projectTitle: string; viewScope: ViewScope; }> = ({ user, tasks, projectTitle, viewScope }) => {
+const UserTaskCard: React.FC<{ 
+    user: User; 
+    tasks: Task[]; 
+    projectTitle: string; 
+    viewScope: ViewScope; 
+    settings: Settings;
+    onAddBulkTaskUpdates: (taskLineIndexes: number[], updateText: string) => void;
+}> = ({ user, tasks, projectTitle, viewScope, settings, onAddBulkTaskUpdates }) => {
+  const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const completedTasks = tasks.filter(t => t.completed).length;
   const totalTasks = tasks.length;
   const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
   const incompleteTasks = tasks.filter(t => !t.completed);
   const totalCost = tasks.reduce((sum, task) => sum + (task.cost ?? 0), 0);
 
-  const handleEmailDraft = () => {
+  const generateEmail = () => {
       if (incompleteTasks.length === 0) {
           alert(`No incomplete tasks for ${user.name}.`);
           return;
@@ -108,44 +119,73 @@ const UserTaskCard: React.FC<{ user: User; tasks: Task[]; projectTitle: string; 
               return projectTitles.length > 1 ? `\nProject: ${title}\n${projectTasks}` : projectTasks;
           })
           .join('');
+      
+      const preamble = settings.emailPreamble.replace('{userName}', user.name.split(' ')[0] || user.name);
 
-      const body = `Hi ${user.name},\n\nHere is a list of your outstanding tasks:\n${taskListString}\n\nPlease provide an update when you can.\n\nBest regards,`;
+      const body = `${preamble}\n\n${taskListString}\n\n${settings.emailPostamble}`;
 
       const mailtoLink = `mailto:${user.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.location.href = mailtoLink;
   };
+  
+  const handleConfirmSend = () => {
+    const incompleteTaskIndexes = incompleteTasks.map(t => t.lineIndex);
+    const updateText = `Reminder sent by ${settings.senderName}.`;
+    onAddBulkTaskUpdates(incompleteTaskIndexes, updateText);
+    generateEmail();
+    setIsConfirmationOpen(false);
+  };
+
+  const handleJustDraft = () => {
+    generateEmail();
+    setIsConfirmationOpen(false);
+  }
 
   return (
-    <div className="bg-slate-800 rounded-lg p-6 flex flex-col">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-4">
-            <img src={user.avatarUrl} alt={user.name} className="h-10 w-10 rounded-full" />
-            <div>
-              <h3 className="font-bold text-lg text-slate-100">{user.name}</h3>
-              <p className="text-sm text-slate-400">{completedTasks} of {totalTasks} tasks completed</p>
-              {totalCost > 0 && <p className="text-sm text-green-400 font-medium">${totalCost.toFixed(2)}</p>}
-            </div>
+    <>
+      <div className="bg-slate-800 rounded-lg p-6 flex flex-col">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-4">
+              <img src={user.avatarUrl} alt={user.name} className="h-10 w-10 rounded-full" />
+              <div>
+                <h3 className="font-bold text-lg text-slate-100">{user.name}</h3>
+                <p className="text-sm text-slate-400">{completedTasks} of {totalTasks} tasks completed</p>
+                {totalCost > 0 && <p className="text-sm text-green-400 font-medium">${totalCost.toFixed(2)}</p>}
+              </div>
+          </div>
+          {incompleteTasks.length > 0 && user.email && (
+              <button
+                  onClick={() => setIsConfirmationOpen(true)}
+                  className="p-2 rounded-full bg-slate-700 hover:bg-indigo-600 text-slate-300 hover:text-white transition-colors flex-shrink-0"
+                  title={`Draft an email to ${user.name}`}
+                  aria-label={`Draft an email to ${user.name}`}
+              >
+                  <Mail className="h-5 w-5" />
+              </button>
+          )}
         </div>
-        {incompleteTasks.length > 0 && user.email && (
-             <button
-                onClick={handleEmailDraft}
-                className="p-2 rounded-full bg-slate-700 hover:bg-indigo-600 text-slate-300 hover:text-white transition-colors flex-shrink-0"
-                title={`Draft an email to ${user.name}`}
-                aria-label={`Draft an email to ${user.name}`}
-            >
-                <Mail className="h-5 w-5" />
-            </button>
-        )}
+        <div className="mb-6">
+          <ProgressBar value={progress} />
+        </div>
+        <div className="space-y-3 overflow-y-auto flex-grow">
+          {tasks.map((task, index) => (
+            <TaskItem key={index} task={task} viewScope={viewScope} />
+          ))}
+        </div>
       </div>
-      <div className="mb-6">
-        <ProgressBar value={progress} />
-      </div>
-      <div className="space-y-3 overflow-y-auto flex-grow">
-        {tasks.map((task, index) => (
-          <TaskItem key={index} task={task} viewScope={viewScope} />
-        ))}
-      </div>
-    </div>
+      <ConfirmationModal
+          isOpen={isConfirmationOpen}
+          onClose={() => setIsConfirmationOpen(false)}
+          onConfirm={handleConfirmSend}
+          onSecondaryAction={handleJustDraft}
+          title="Send Reminder"
+          confirmText="Yes, add update"
+          secondaryText="No, just draft email"
+      >
+          <p>Do you want to add an update note to the {incompleteTasks.length} pending task(s) for {user.name}?</p>
+          <p className="text-sm text-slate-400 mt-2">The note will say: <em className="text-slate-300">"Reminder sent by {settings.senderName}."</em></p>
+      </ConfirmationModal>
+    </>
   );
 };
 
@@ -162,7 +202,7 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string; 
 );
 
 
-const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassignedTasks, projectTitle, viewScope, totalCost }) => {
+const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassignedTasks, projectTitle, viewScope, totalCost, settings, onAddBulkTaskUpdates }) => {
   const allTasks = [...Object.values(groupedTasks).flatMap(g => g.tasks), ...unassignedTasks];
   const totalTasks = allTasks.length;
   const completedTasks = allTasks.filter(t => t.completed).length;
@@ -182,7 +222,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassig
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {assignedUsersWithTasks.map(({ user, tasks }) => (
-          <UserTaskCard key={user.alias} user={user} tasks={tasks} projectTitle={projectTitle} viewScope={viewScope} />
+          <UserTaskCard key={user.alias} user={user} tasks={tasks} projectTitle={projectTitle} viewScope={viewScope} settings={settings} onAddBulkTaskUpdates={onAddBulkTaskUpdates} />
         ))}
 
         {unassignedTasks.length > 0 && (

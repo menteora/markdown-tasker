@@ -8,7 +8,9 @@ import type { User, Project, GroupedTasks, Task } from './types';
 import { useMarkdownParser } from './hooks/useMarkdownParser';
 import { INITIAL_USERS } from './constants';
 import saveAs from 'file-saver';
-import { ChevronsUpDown } from 'lucide-react';
+import { ChevronsUpDown, Settings as SettingsIcon } from 'lucide-react';
+import { useSettings } from './hooks/useSettings';
+import SettingsModal from './components/SettingsModal';
 
 const initialMarkdown = `# Project Titan Launch 🚀
 
@@ -133,6 +135,8 @@ const App: React.FC = () => {
   const [view, setView] = useState<View>('editor');
   const [currentProjectIndex, setCurrentProjectIndex] = useState(0);
   const [viewScope, setViewScope] = useState<ViewScope>('all');
+  const [settings, saveSettings] = useSettings();
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   
   const projects = useMarkdownParser(markdown, users);
 
@@ -290,6 +294,30 @@ const App: React.FC = () => {
         return lines.join('\n');
     });
   }, [markdownOffset]);
+  
+  const handleAddBulkTaskUpdates = useCallback((taskLineIndexes: number[], updateText: string) => {
+    setMarkdown(prevMarkdown => {
+        const lines = prevMarkdown.split('\n');
+        const today = new Date().toISOString().split('T')[0];
+        const newUpdateLine = `  - ${today}: ${updateText}`;
+        const updateRegex = /^  - \d{4}-\d{2}-\d{2}: .*/;
+        
+        const sortedIndexes = [...taskLineIndexes].sort((a, b) => b - a);
+
+        for (const taskLineIndex of sortedIndexes) {
+            let insertAt = taskLineIndex + 1;
+            while (insertAt < lines.length && (updateRegex.test(lines[insertAt]) || lines[insertAt].trim() === '')) {
+                if (updateRegex.test(lines[insertAt])) {
+                    insertAt++;
+                } else {
+                    break;
+                }
+            }
+            lines.splice(insertAt, 0, newUpdateLine);
+        }
+        return lines.join('\n');
+    });
+  }, []);
 
   const handleUpdateTaskUpdate = useCallback((relativeUpdateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => {
       const updateLineIndex = relativeUpdateLineIndex + markdownOffset;
@@ -425,6 +453,8 @@ const App: React.FC = () => {
             projectTitle={dataForOverview.title}
             viewScope={viewScope}
             totalCost={dataForOverview.totalCost}
+            settings={settings}
+            onAddBulkTaskUpdates={handleAddBulkTaskUpdates}
           />
         );
     }
@@ -475,6 +505,14 @@ const App: React.FC = () => {
             </button>
           </nav>
           <div className="w-px h-6 bg-slate-700 mx-2"></div>
+           <button
+              onClick={() => setIsSettingsModalOpen(true)}
+              className="p-2 rounded-md transition-colors font-semibold bg-slate-700 hover:bg-slate-600"
+              aria-label="Email Settings"
+              title="Email Settings"
+          >
+              <SettingsIcon className="w-5 h-5" />
+          </button>
           <ProjectActions
               markdown={markdown}
               projects={projects}
@@ -489,6 +527,12 @@ const App: React.FC = () => {
       <main className="h-[calc(100vh-85px)]">
         {renderView()}
       </main>
+      <SettingsModal 
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        settings={settings}
+        onSave={saveSettings}
+      />
     </div>
   );
 };
