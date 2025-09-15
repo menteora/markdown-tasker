@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { BookUp, Upload, Download, FileText } from 'lucide-react';
+import { BookUp, Upload, Download, FileText, CalendarDays } from 'lucide-react';
 import * as docx from 'docx';
 import saveAs from 'file-saver';
 import type { Task, User, Project } from '../types';
+import DailyReportModal from './DailyReportModal';
 
 type ViewScope = 'single' | 'all';
 
@@ -18,6 +19,7 @@ interface ProjectActionsProps {
 
 const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, users, onExportProject, onImportProject, viewScope, currentProject }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [isDailyReportModalOpen, setIsDailyReportModalOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
@@ -94,15 +96,113 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
        });
    };
 
+    const renderTasksAndFilteredUpdatesForDocx = (tasks: Task[], children: docx.Paragraph[]) => {
+        tasks.forEach(task => {
+            const taskRuns = createInlinesFromMarkdown(task.text, task.completed ? { strike: true } : {});
+            const taskTextChildren: (docx.TextRun | docx.ExternalHyperlink)[] = [new docx.TextRun(task.completed ? '☑ ' : '☐ '), ...taskRuns];
+            
+            children.push(new docx.Paragraph({ children: taskTextChildren, bullet: { level: 0 } }));
+
+            task.updates.forEach(update => {
+                const updateAssignee = update.assigneeAlias ? userByAlias.get(update.assigneeAlias) : null;
+                const updateTextRuns = createInlinesFromMarkdown(update.text);
+                const updateChildren = [new docx.TextRun({ text: `${formatDate(update.date)}: `, italics: true, color: '808080'}), ...updateTextRuns];
+                if (updateAssignee) {
+                    updateChildren.push(new docx.TextRun({ text: ` - ${updateAssignee.name}`, italics: true, color: '808080' }));
+                }
+                children.push(new docx.Paragraph({ children: updateChildren, bullet: { level: 1 } }));
+            });
+        });
+    };
+
+    const handleDailyReportExport = useCallback(async (selectedDate: string) => {
+        const docTitle = `Daily_Report_${selectedDate}`;
+        const reportChildren: docx.Paragraph[] = [];
+
+        reportChildren.push(new docx.Paragraph({
+            text: `Daily Update Report for ${formatDate(selectedDate)}`,
+            heading: docx.HeadingLevel.TITLE,
+            alignment: docx.AlignmentType.CENTER
+        }));
+    
+        const projectsToExport = viewScope === 'all' ? projects : [currentProject];
+        let updatesFound = false;
+
+        projectsToExport.forEach((project, index) => {
+            const allTasksInProject = [
+                ...project.unassignedTasks,
+                ...Object.values(project.groupedTasks).flatMap(g => g.tasks)
+            ];
+
+            const tasksWithUpdatesOnDate = allTasksInProject.map(task => {
+                const relevantUpdates = task.updates.filter(update => update.date === selectedDate);
+                return { ...task, updates: relevantUpdates };
+            }).filter(task => task.updates.length > 0);
+            
+            if (tasksWithUpdatesOnDate.length === 0) return;
+
+            updatesFound = true;
+            if (projectsToExport.length > 1) {
+                 reportChildren.push(new docx.Paragraph({ 
+                    text: project.title, 
+                    heading: docx.HeadingLevel.HEADING_1,
+                    spacing: { before: index > 0 ? 400 : 200, after: 200 }
+                }));
+            }
+    
+            const groupedByAssignee: { [key: string]: Task[] } = {};
+            tasksWithUpdatesOnDate.forEach(task => {
+                const key = task.assigneeAlias || 'unassigned';
+                if (!groupedByAssignee[key]) groupedByAssignee[key] = [];
+                groupedByAssignee[key].push(task);
+            });
+    
+            const assigneeOrder = [...users.map(u => u.alias), 'unassigned'];
+    
+            assigneeOrder.forEach(alias => {
+                if (groupedByAssignee[alias]) {
+                    const userName = alias === 'unassigned' ? 'Unassigned' : userByAlias.get(alias)?.name || alias;
+                    reportChildren.push(new docx.Paragraph({
+                        text: userName,
+                        heading: docx.HeadingLevel.HEADING_2,
+                        spacing: { before: 300, after: 150 }
+                    }));
+                    renderTasksAndFilteredUpdatesForDocx(groupedByAssignee[alias], reportChildren);
+                }
+            });
+        });
+        
+        if (!updatesFound) {
+            // FIX: The `italics` property is not a valid IParagraphOptions property.
+            // It must be applied to a TextRun within the paragraph's children.
+            reportChildren.push(new docx.Paragraph({
+                children: [
+                    new docx.TextRun({
+                        text: "No updates found for the selected date.",
+                        italics: true,
+                    }),
+                ],
+                alignment: docx.AlignmentType.CENTER,
+                spacing: { before: 200 },
+            }));
+        }
+        
+        const doc = new docx.Document({ sections: [{ children: reportChildren }] });
+        const blob = await docx.Packer.toBlob(doc);
+        saveAs(blob, `${docTitle}.docx`);
+
+        setIsDailyReportModalOpen(false);
+        setIsOpen(false);
+    }, [projects, currentProject, viewScope, users, userByAlias]);
+
+
     const handleDocxExport = useCallback(async () => {
         const docTitle = viewScope === 'all' ? 'All_Projects_Summary' : currentProject.title.replace(/\s/g, '_');
         
-        // Use full markdown for "All Projects" view, or slice it for single project view.
         const markdownToExport = viewScope === 'single' && currentProject
             ? markdown.split('\n').slice(currentProject.startLine, currentProject.endLine + 1).join('\n')
             : markdown;
 
-        // --- Part 1: Full Project Page from Markdown ---
         const projectPageChildren: docx.Paragraph[] = [];
         const lines = markdownToExport.split('\n');
         
@@ -179,7 +279,6 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
             i++;
         }
 
-        // --- Part 2: Task Summary ---
         const taskSummaryChildren: docx.Paragraph[] = [];
         taskSummaryChildren.push(new docx.Paragraph({ text: 'Task Summary', heading: docx.HeadingLevel.HEADING_1, spacing: { after: 200 } }));
 
@@ -197,7 +296,7 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
                     renderTasksForDocx(project.unassignedTasks, taskSummaryChildren);
                 }
             });
-        } else { // Single project view
+        } else { 
             taskSummaryChildren.push(new docx.Paragraph({ text: currentProject.title, heading: docx.HeadingLevel.HEADING_2, spacing: { before: 400, after: 200 } }));
             const assignedUsersWithTasks = Object.values(currentProject.groupedTasks).filter(g => g.tasks.length > 0);
             assignedUsersWithTasks.forEach(({ user, tasks }) => {
@@ -256,14 +355,27 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
                         <button onClick={() => { onExportProject(); setIsOpen(false); }} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-200" role="menuitem">
                             <Download className="w-4 h-4" /><span>Export Project (.mdtasker)</span>
                         </button>
+                        
                         <div className="border-t border-slate-700 my-2"></div>
                         <div className="px-3 py-2 text-xs font-semibold text-slate-400">Document Export</div>
                         <button onClick={handleDocxExport} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-200" role="menuitem">
                            <FileText className="w-4 h-4" /> <span>Export as DOCX</span>
                         </button>
+                        
+                        <div className="border-t border-slate-700 my-2"></div>
+                        <div className="px-3 py-2 text-xs font-semibold text-slate-400">Reports</div>
+                        <button onClick={() => { setIsDailyReportModalOpen(true); setIsOpen(false); }} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-200" role="menuitem">
+                            <CalendarDays className="w-4 h-4" /> <span>Export Daily Report...</span>
+                        </button>
+
                     </div>
                 </div>
             )}
+             <DailyReportModal
+                isOpen={isDailyReportModalOpen}
+                onClose={() => setIsDailyReportModalOpen(false)}
+                onGenerate={handleDailyReportExport}
+            />
         </div>
     );
 };
