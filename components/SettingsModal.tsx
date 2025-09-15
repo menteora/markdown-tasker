@@ -1,24 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
-import type { Settings } from '../types';
+import type { Settings, User } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: Settings;
   onSave: (newSettings: Partial<Settings>) => void;
+  users: User[];
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, users }) => {
   const [currentSettings, setCurrentSettings] = useState(settings);
 
   useEffect(() => {
     setCurrentSettings(settings);
   }, [settings, isOpen]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setCurrentSettings(prev => ({ ...prev, [name]: value }));
+    if (name === 'senderAlias') {
+      setCurrentSettings(prev => ({ ...prev, senderAlias: value || null }));
+    } else {
+      setCurrentSettings(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSave = () => {
@@ -40,16 +45,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
         
         <div className="space-y-6">
           <div>
-            <label htmlFor="senderName" className="block text-sm font-medium text-slate-300 mb-1">Your Name</label>
-            <p className="text-xs text-slate-500 mb-2">This name is used in the task update note (e.g., "Reminder sent by...").</p>
-            <input
-              id="senderName"
-              name="senderName"
-              type="text"
-              value={currentSettings.senderName}
+            <label htmlFor="senderAlias" className="block text-sm font-medium text-slate-300 mb-1">Reminder Assignee</label>
+            <p className="text-xs text-slate-500 mb-2">Select a user to assign the reminder update note to.</p>
+            <select
+              id="senderAlias"
+              name="senderAlias"
+              value={currentSettings.senderAlias ?? ''}
               onChange={handleChange}
               className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-            />
+            >
+              <option value="">None (Just a note)</option>
+              {users.map(user => (
+                <option key={user.alias} value={user.alias}>{user.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>

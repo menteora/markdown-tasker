@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { User, Task, GroupedTasks, Settings } from '../types';
 import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2 } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
@@ -34,8 +34,9 @@ interface ProjectOverviewProps {
   projectTitle: string;
   viewScope: ViewScope;
   totalCost: number;
+  users: User[];
   settings: Settings;
-  onAddBulkTaskUpdates: (taskLineIndexes: number[], updateText: string) => void;
+  onAddBulkTaskUpdates: (taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => void;
 }
 
 const TaskItem: React.FC<{ task: Task; viewScope: ViewScope }> = ({ task, viewScope }) => (
@@ -80,16 +81,19 @@ const UserTaskCard: React.FC<{
     user: User; 
     tasks: Task[]; 
     projectTitle: string; 
-    viewScope: ViewScope; 
+    viewScope: ViewScope;
+    users: User[];
     settings: Settings;
-    onAddBulkTaskUpdates: (taskLineIndexes: number[], updateText: string) => void;
-}> = ({ user, tasks, projectTitle, viewScope, settings, onAddBulkTaskUpdates }) => {
+    onAddBulkTaskUpdates: (taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => void;
+}> = ({ user, tasks, projectTitle, viewScope, users, settings, onAddBulkTaskUpdates }) => {
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const completedTasks = tasks.filter(t => t.completed).length;
   const totalTasks = tasks.length;
   const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
   const incompleteTasks = tasks.filter(t => !t.completed);
   const totalCost = tasks.reduce((sum, task) => sum + (task.cost ?? 0), 0);
+
+  const sender = useMemo(() => users.find(u => u.alias === settings.senderAlias), [users, settings.senderAlias]);
 
   const generateEmail = () => {
       if (incompleteTasks.length === 0) {
@@ -125,13 +129,13 @@ const UserTaskCard: React.FC<{
       const body = `${preamble}\n\n${taskListString}\n\n${settings.emailPostamble}`;
 
       const mailtoLink = `mailto:${user.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      window.location.href = mailtoLink;
+      window.open(mailtoLink, '_blank');
   };
   
   const handleConfirmSend = () => {
     const incompleteTaskIndexes = incompleteTasks.map(t => t.lineIndex);
-    const updateText = `Reminder sent by ${settings.senderName}.`;
-    onAddBulkTaskUpdates(incompleteTaskIndexes, updateText);
+    const updateText = `Reminder sent.`;
+    onAddBulkTaskUpdates(incompleteTaskIndexes, updateText, settings.senderAlias);
     generateEmail();
     setIsConfirmationOpen(false);
   };
@@ -183,7 +187,11 @@ const UserTaskCard: React.FC<{
           secondaryText="No, just draft email"
       >
           <p>Do you want to add an update note to the {incompleteTasks.length} pending task(s) for {user.name}?</p>
-          <p className="text-sm text-slate-400 mt-2">The note will say: <em className="text-slate-300">"Reminder sent by {settings.senderName}."</em></p>
+          {sender ? (
+              <p className="text-sm text-slate-400 mt-2">The note will be assigned to <em className="text-slate-300">{sender.name}</em>.</p>
+          ) : (
+             <p className="text-sm text-slate-400 mt-2">The note will be added without an assignee.</p>
+          )}
       </ConfirmationModal>
     </>
   );
@@ -202,7 +210,7 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string; 
 );
 
 
-const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassignedTasks, projectTitle, viewScope, totalCost, settings, onAddBulkTaskUpdates }) => {
+const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassignedTasks, projectTitle, viewScope, totalCost, users, settings, onAddBulkTaskUpdates }) => {
   const allTasks = [...Object.values(groupedTasks).flatMap(g => g.tasks), ...unassignedTasks];
   const totalTasks = allTasks.length;
   const completedTasks = allTasks.filter(t => t.completed).length;
@@ -222,7 +230,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassig
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {assignedUsersWithTasks.map(({ user, tasks }) => (
-          <UserTaskCard key={user.alias} user={user} tasks={tasks} projectTitle={projectTitle} viewScope={viewScope} settings={settings} onAddBulkTaskUpdates={onAddBulkTaskUpdates} />
+          <UserTaskCard key={user.alias} user={user} tasks={tasks} projectTitle={projectTitle} viewScope={viewScope} users={users} settings={settings} onAddBulkTaskUpdates={onAddBulkTaskUpdates} />
         ))}
 
         {unassignedTasks.length > 0 && (
