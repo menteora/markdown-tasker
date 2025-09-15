@@ -4,7 +4,7 @@ import type { Settings } from '../types';
 const SETTINGS_KEY = 'md-tasker-email-settings';
 
 const DEFAULT_SETTINGS: Settings = {
-  senderName: 'Project Manager',
+  senderAlias: null,
   emailPreamble: 'Hi {userName},\n\nThis is a friendly reminder about your outstanding tasks for the project. Please see the list below:',
   emailPostamble: 'Please provide an update when you can.\n\nBest regards,',
 };

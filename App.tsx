@@ -295,11 +295,12 @@ const App: React.FC = () => {
     });
   }, [markdownOffset]);
   
-  const handleAddBulkTaskUpdates = useCallback((taskLineIndexes: number[], updateText: string) => {
+  const handleAddBulkTaskUpdates = useCallback((taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => {
     setMarkdown(prevMarkdown => {
         const lines = prevMarkdown.split('\n');
         const today = new Date().toISOString().split('T')[0];
-        const newUpdateLine = `  - ${today}: ${updateText}`;
+        const assigneeString = assigneeAlias ? ` (@${assigneeAlias})` : '';
+        const newUpdateLine = `  - ${today}: ${updateText}${assigneeString}`;
         const updateRegex = /^  - \d{4}-\d{2}-\d{2}: .*/;
         
         const sortedIndexes = [...taskLineIndexes].sort((a, b) => b - a);
@@ -453,6 +454,7 @@ const App: React.FC = () => {
             projectTitle={dataForOverview.title}
             viewScope={viewScope}
             totalCost={dataForOverview.totalCost}
+            users={users}
             settings={settings}
             onAddBulkTaskUpdates={handleAddBulkTaskUpdates}
           />
@@ -532,6 +534,7 @@ const App: React.FC = () => {
         onClose={() => setIsSettingsModalOpen(false)}
         settings={settings}
         onSave={saveSettings}
+        users={users}
       />
     </div>
   );

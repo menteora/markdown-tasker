@@ -40,7 +40,7 @@ export interface Project {
 }
 
 export interface Settings {
-  senderName: string;
+  senderAlias: string | null;
   emailPreamble: string;
   emailPostamble: string;
 }
