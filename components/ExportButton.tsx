@@ -1,0 +1,220 @@
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { BookUp, Upload, Download, FileText } from 'lucide-react';
+import * as docx from 'docx';
+import saveAs from 'file-saver';
+import type { Task, GroupedTasks, User } from '../types';
+
+interface ProjectActionsProps {
+    markdown: string;
+    projectTitle: string;
+    groupedTasks: GroupedTasks;
+    unassignedTasks: Task[];
+    users: User[];
+    onExportProject: () => void;
+    onImportProject: (file: File) => void;
+}
+
+const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projectTitle, groupedTasks, unassignedTasks, users, onExportProject, onImportProject }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+    
+    const createRunsFromMarkdown = (text: string, options: any = {}): docx.TextRun[] => {
+        const parts = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+        return parts.filter(Boolean).map((part) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return new docx.TextRun({ text: part.slice(2, -2), bold: true, ...options });
+            }
+            if (part.startsWith('*') && part.endsWith('*')) {
+                return new docx.TextRun({ text: part.slice(1, -1), italics: true, ...options });
+            }
+            return new docx.TextRun({ text: part, ...options });
+        });
+    };
+
+    const formatDate = (dateString: string | null): string => {
+        if (!dateString) return '';
+        try {
+            // Add T00:00:00 to handle timezone discrepancies and ensure correct date parsing
+            const date = new Date(`${dateString}T00:00:00`);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+            });
+        } catch (e) {
+            return dateString; // Fallback to original string if parsing fails
+        }
+    };
+
+    const handleDocxExport = useCallback(async () => {
+        // --- Part 1: Full Project Page ---
+        const projectPageChildren: docx.Paragraph[] = [];
+        const lines = markdown.split('\n');
+        
+        const taskRegex = /^- \[( |x)\] (.*)/;
+        const assigneeRegex = /\s\(@([a-zA-Z0-9_]+)\)/;
+        const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
+        const updateRegex = /^  - (\d{4}-\d{2}-\d{2}): (.*)/;
+
+        let i = 0;
+        while (i < lines.length) {
+            const line = lines[i];
+            const taskMatch = line.match(taskRegex);
+            if (taskMatch) {
+                let fullTaskText = taskMatch[2];
+                const completed = taskMatch[1] === 'x';
+                let completionDate: string | null = null;
+                const dateMatch = fullTaskText.match(dateRegex);
+                if (dateMatch) {
+                    completionDate = dateMatch[1];
+                    fullTaskText = fullTaskText.replace(dateRegex, '').trim();
+                }
+                let assignee: User | null = null;
+                const assigneeMatch = fullTaskText.match(assigneeRegex);
+                if (assigneeMatch) {
+                    assignee = userByAlias.get(assigneeMatch[1]) || null;
+                    fullTaskText = fullTaskText.replace(assigneeRegex, '').trim();
+                }
+                const taskRuns = createRunsFromMarkdown(fullTaskText, completed ? { strike: true } : {});
+                const taskTextChildren: docx.TextRun[] = [ new docx.TextRun(completed ? '☑ ' : '☐ '), ...taskRuns ];
+                if (assignee) taskTextChildren.push(new docx.TextRun({ text: ` (${assignee.name})`, color: '808080', size: 18, italics: true }));
+                if (completed && completionDate) {
+                    taskTextChildren.push(new docx.TextRun({ text: ` (Completed: ${formatDate(completionDate)})`, color: '808080', size: 18, italics: true }));
+                }
+                projectPageChildren.push(new docx.Paragraph({ children: taskTextChildren, bullet: { level: 0 } }));
+                
+                let j = i + 1;
+                while (j < lines.length) {
+                    const updateLine = lines[j];
+                    if (updateLine.trim() === '') { j++; continue; }
+                    const updateMatch = updateLine.match(updateRegex);
+                    if (updateMatch) {
+                        let updateText = updateMatch[2].trim();
+                        let updateAssignee: User | null = null;
+                        const updateAssigneeMatch = updateText.match(assigneeRegex);
+                        if (updateAssigneeMatch) {
+                            updateAssignee = userByAlias.get(updateAssigneeMatch[1]) || null;
+                            updateText = updateText.replace(assigneeRegex, '').trim();
+                        }
+                        const updateTextRuns = createRunsFromMarkdown(updateText);
+                        const updateChildren = [new docx.TextRun({ text: `${formatDate(updateMatch[1])}: `, italics: true, color: '808080'}), ...updateTextRuns];
+                        if (updateAssignee) updateChildren.push(new docx.TextRun({ text: ` - ${updateAssignee.name}`, italics: true, color: '808080' }));
+                        projectPageChildren.push(new docx.Paragraph({ children: updateChildren, bullet: { level: 1 } }));
+                        j++;
+                    } else break;
+                }
+                i = j;
+                continue;
+            }
+            const h1Match = line.match(/^# (.*)/); if (h1Match) { projectPageChildren.push(new docx.Paragraph({ children: createRunsFromMarkdown(h1Match[1]), heading: docx.HeadingLevel.HEADING_1 })); i++; continue; }
+            const h2Match = line.match(/^## (.*)/); if (h2Match) { projectPageChildren.push(new docx.Paragraph({ children: createRunsFromMarkdown(h2Match[1]), heading: docx.HeadingLevel.HEADING_2 })); i++; continue; }
+            const h3Match = line.match(/^### (.*)/); if (h3Match) { projectPageChildren.push(new docx.Paragraph({ children: createRunsFromMarkdown(h3Match[1]), heading: docx.HeadingLevel.HEADING_3 })); i++; continue; }
+            const ulMatch = line.match(/^- (.*)/); if (ulMatch) { projectPageChildren.push(new docx.Paragraph({ children: createRunsFromMarkdown(ulMatch[1]), bullet: { level: 0 } })); i++; continue; }
+            projectPageChildren.push(new docx.Paragraph({ children: createRunsFromMarkdown(line) }));
+            i++;
+        }
+
+        // --- Part 2: Task Summary ---
+        const taskSummaryChildren: docx.Paragraph[] = [];
+        taskSummaryChildren.push(new docx.Paragraph({ text: 'Task Summary', heading: docx.HeadingLevel.HEADING_1, spacing: { after: 200 } }));
+        
+        const renderTasks = (tasks: Task[]) => {
+             tasks.forEach(task => {
+                const taskRuns = createRunsFromMarkdown(task.text, task.completed ? { strike: true } : {});
+                const taskTextChildren: docx.TextRun[] = [new docx.TextRun(task.completed ? '☑ ' : '☐ '), ...taskRuns];
+                if (task.completed && task.completionDate) {
+                    taskTextChildren.push(new docx.TextRun({ text: ` (Completed: ${formatDate(task.completionDate)})`, color: '808080', size: 18, italics: true }));
+                }
+                taskSummaryChildren.push(new docx.Paragraph({ children: taskTextChildren, bullet: { level: 0 } }));
+
+                task.updates.forEach(update => {
+                    const updateAssignee = update.assigneeAlias ? userByAlias.get(update.assigneeAlias) : null;
+                    const updateTextRuns = createRunsFromMarkdown(update.text);
+                    const updateChildren = [new docx.TextRun({ text: `${formatDate(update.date)}: `, italics: true, color: '808080'}), ...updateTextRuns];
+                    if (updateAssignee) {
+                        updateChildren.push(new docx.TextRun({ text: ` - ${updateAssignee.name}`, italics: true, color: '808080' }));
+                    }
+                    taskSummaryChildren.push(new docx.Paragraph({ children: updateChildren, bullet: { level: 1 } }));
+                });
+            });
+        };
+        
+        const assignedUsersWithTasks = Object.values(groupedTasks).filter(group => group.tasks.length > 0);
+        assignedUsersWithTasks.forEach(({ user, tasks }) => {
+            taskSummaryChildren.push(new docx.Paragraph({ text: user.name, heading: docx.HeadingLevel.HEADING_2, spacing: { before: 400, after: 200 } }));
+            renderTasks(tasks);
+        });
+
+        if (unassignedTasks.length > 0) {
+            taskSummaryChildren.push(new docx.Paragraph({ text: 'Unassigned Tasks', heading: docx.HeadingLevel.HEADING_2, spacing: { before: 400, after: 200 } }));
+            renderTasks(unassignedTasks);
+        }
+
+        const doc = new docx.Document({
+            sections: [
+                { children: projectPageChildren },
+                { properties: { type: docx.SectionType.NEXT_PAGE }, children: taskSummaryChildren }
+            ]
+        });
+        const blob = await docx.Packer.toBlob(doc);
+        saveAs(blob, `${projectTitle.replace(/\s/g, '_')}.docx`);
+        setIsOpen(false);
+    }, [markdown, projectTitle, groupedTasks, unassignedTasks, userByAlias]);
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+        setIsOpen(false);
+    };
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            onImportProject(file);
+        }
+        if (event.target) event.target.value = '';
+    };
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".mdtasker,application/json" />
+            <button
+                onClick={() => setIsOpen(prev => !prev)}
+                className="flex items-center space-x-2 px-4 py-2 rounded-md transition-colors font-semibold bg-slate-700 hover:bg-slate-600"
+                aria-haspopup="true" aria-expanded={isOpen}
+            >
+                <BookUp className="w-4 h-4" />
+                <span>Project Actions</span>
+            </button>
+            {isOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-30">
+                    <div className="p-2" role="menu" aria-orientation="vertical">
+                        <div className="px-3 py-2 text-xs font-semibold text-slate-400">Project File</div>
+                         <button onClick={handleImportClick} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-200" role="menuitem">
+                            <Upload className="w-4 h-4" /><span>Import Project (.mdtasker)</span>
+                        </button>
+                        <button onClick={() => { onExportProject(); setIsOpen(false); }} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-200" role="menuitem">
+                            <Download className="w-4 h-4" /><span>Export Project (.mdtasker)</span>
+                        </button>
+                        <div className="border-t border-slate-700 my-2"></div>
+                        <div className="px-3 py-2 text-xs font-semibold text-slate-400">Document Export</div>
+                        <button onClick={handleDocxExport} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-200" role="menuitem">
+                           <FileText className="w-4 h-4" /> <span>Export as DOCX</span>
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default ProjectActions;
