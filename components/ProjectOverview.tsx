@@ -134,7 +134,7 @@ const UserTaskCard: React.FC<{
   
   const handleConfirmSend = () => {
     const incompleteTaskIndexes = incompleteTasks.map(t => t.lineIndex);
-    const updateText = `Reminder sent.`;
+    const updateText = settings.reminderMessage;
     onAddBulkTaskUpdates(incompleteTaskIndexes, updateText, settings.senderAlias);
     generateEmail();
     setIsConfirmationOpen(false);

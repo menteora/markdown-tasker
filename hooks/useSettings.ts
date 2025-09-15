@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS: Settings = {
   senderAlias: null,
   emailPreamble: 'Hi {userName},\n\nThis is a friendly reminder about your outstanding tasks for the project. Please see the list below:',
   emailPostamble: 'Please provide an update when you can.\n\nBest regards,',
+  reminderMessage: 'Reminder sent.',
 };
 
 export const useSettings = (): [Settings, (newSettings: Partial<Settings>) => void] => {
