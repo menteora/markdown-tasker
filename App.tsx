@@ -1,10 +1,11 @@
+
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Editor from './components/Editor';
 import Preview from './components/Preview';
 import UserManagement from './components/UserManagement';
 import ProjectOverview from './components/ProjectOverview';
 import ProjectActions from './components/ProjectActions';
-import type { User, Project, GroupedTasks, Task } from './types';
+import type { User, Project, GroupedTasks, Task, Settings } from './types';
 import { useMarkdownParser } from './hooks/useMarkdownParser';
 import { INITIAL_USERS } from './constants';
 import saveAs from 'file-saver';
@@ -48,6 +49,24 @@ This is a second project within the same file. You can switch between projects u
 
 type View = 'editor' | 'users' | 'overview';
 type ViewScope = 'single' | 'all';
+
+const PROJECT_STORAGE_KEY = 'md-tasker-project-state';
+
+const loadProjectFromStorage = () => {
+    try {
+        const storedState = localStorage.getItem(PROJECT_STORAGE_KEY);
+        if (storedState) {
+            const data = JSON.parse(storedState);
+            if (data && typeof data.markdown === 'string' && Array.isArray(data.users)) {
+                return { markdown: data.markdown, users: data.users };
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load project from localStorage:', error);
+    }
+    return { markdown: initialMarkdown, users: INITIAL_USERS };
+};
+
 
 const ProjectSwitcher: React.FC<{
   projects: Project[];
@@ -130,8 +149,8 @@ const ViewScopeToggle: React.FC<{ scope: ViewScope; onScopeChange: (scope: ViewS
 
 
 const App: React.FC = () => {
-  const [markdown, setMarkdown] = useState<string>(initialMarkdown);
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  const [markdown, setMarkdown] = useState<string>(() => loadProjectFromStorage().markdown);
+  const [users, setUsers] = useState<User[]>(() => loadProjectFromStorage().users);
   const [view, setView] = useState<View>('editor');
   const [currentProjectIndex, setCurrentProjectIndex] = useState(0);
   const [viewScope, setViewScope] = useState<ViewScope>('all');
@@ -139,6 +158,15 @@ const App: React.FC = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   
   const projects = useMarkdownParser(markdown, users);
+  
+  useEffect(() => {
+    try {
+        const projectState = { markdown, users };
+        localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(projectState));
+    } catch (error) {
+        console.error('Failed to save project to localStorage:', error);
+    }
+  }, [markdown, users]);
 
   useEffect(() => {
     if (currentProjectIndex >= projects.length) {
@@ -373,11 +401,11 @@ const App: React.FC = () => {
   }, [users]);
   
   const handleExportProject = useCallback(() => {
-    const projectData = { users, markdown };
+    const projectData = { users, markdown, settings };
     const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
     const filename = projects.length > 1 ? 'Multi-Project.mdtasker' : `${currentProject.title.replace(/\s/g, '_')}.mdtasker`;
     saveAs(blob, filename);
-  }, [users, markdown, projects, currentProject.title]);
+  }, [users, markdown, settings, projects, currentProject.title]);
   
   const handleImportProject = useCallback((file: File) => {
     const reader = new FileReader();
@@ -388,6 +416,9 @@ const App: React.FC = () => {
             if (data && Array.isArray(data.users) && typeof data.markdown === 'string') {
                 setUsers(data.users);
                 setMarkdown(data.markdown);
+                if (data.settings) {
+                    saveSettings(data.settings as Settings);
+                }
                 setCurrentProjectIndex(0);
                 setViewScope('all');
                 alert('Project imported successfully!');
@@ -400,7 +431,7 @@ const App: React.FC = () => {
         }
     };
     reader.readAsText(file);
-  }, []);
+  }, [saveSettings]);
 
   const getHeaderDescription = () => {
     switch(view) {

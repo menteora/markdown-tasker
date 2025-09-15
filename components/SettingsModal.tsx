@@ -60,6 +60,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
               ))}
             </select>
           </div>
+          
+          <div>
+            <label htmlFor="reminderMessage" className="block text-sm font-medium text-slate-300 mb-1">Reminder Update Note</label>
+            <p className="text-xs text-slate-500 mb-2">The text to add to a task's history when a reminder is sent.</p>
+            <input
+              type="text"
+              id="reminderMessage"
+              name="reminderMessage"
+              value={currentSettings.reminderMessage}
+              onChange={handleChange}
+              className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
 
           <div>
             <label htmlFor="emailPreamble" className="block text-sm font-medium text-slate-300 mb-1">Email Preamble</label>

@@ -43,4 +43,5 @@ export interface Settings {
   senderAlias: string | null;
   emailPreamble: string;
   emailPostamble: string;
+  reminderMessage: string;
 }
