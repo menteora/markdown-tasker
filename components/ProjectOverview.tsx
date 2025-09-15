@@ -3,6 +3,11 @@ import type { User, Task, GroupedTasks, Settings } from '../types';
 import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2 } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
 
+const formatMarkdownForEmail = (text: string): string => {
+  const linkRegex = /\[(.*?)\]\((.*?)\)/g;
+  return text.replace(linkRegex, (_match, linkText, url) => `${linkText} (${url})`);
+};
+
 const parseInlineMarkdown = (text: string): React.ReactNode[] => {
   const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);
   
@@ -118,7 +123,8 @@ const UserTaskCard: React.FC<{
           .map(title => {
               const projectTasks = tasksByProject[title].map(task => {
                 const costString = task.cost ? ` ($${task.cost.toFixed(2)})` : '';
-                return `- [ ] ${task.text}${costString}`;
+                const formattedText = formatMarkdownForEmail(task.text);
+                return `- [ ] ${formattedText}${costString}`;
               }).join('\n');
               return projectTitles.length > 1 ? `\nProject: ${title}\n${projectTasks}` : projectTasks;
           })
