@@ -17,6 +17,7 @@ export interface Task {
   text: string;
   completed: boolean;
   assigneeAlias: string | null;
+  creationDate?: string | null;
   completionDate: string | null;
   updates: TaskUpdate[];
   projectTitle: string;

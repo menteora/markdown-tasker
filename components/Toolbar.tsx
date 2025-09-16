@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Bold, Italic, List, ListTodo, UserPlus, Link } from 'lucide-react';
 import type { User } from '../types';
 
@@ -30,7 +30,16 @@ const ToolbarButton: React.FC<ToolbarButtonProps> = ({ onClick, label, children 
 
 const Toolbar: React.FC<ToolbarProps> = ({ onFormat, onInsert, users }) => {
   const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const filteredUsers = useMemo(() => {
+    if (!searchTerm) return users;
+    return users.filter(user => 
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        user.alias.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [users, searchTerm]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -41,6 +50,11 @@ const Toolbar: React.FC<ToolbarProps> = ({ onFormat, onInsert, users }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!isAssigneeDropdownOpen) setSearchTerm('');
+  }, [isAssigneeDropdownOpen]);
+
 
   const handleAssigneeSelect = (alias: string) => {
     onInsert(` (@${alias})`);
@@ -73,8 +87,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ onFormat, onInsert, users }) => {
         {isAssigneeDropdownOpen && (
           <div className="absolute left-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20">
             <div className="p-2">
+                <input
+                    type="text"
+                    placeholder="Search assignee..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full mb-2 px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-md text-slate-200 focus:ring-1 focus:ring-indigo-500 outline-none"
+                />
               <div className="text-xs text-slate-400 px-2 pb-1 font-semibold">Insert Assignee...</div>
-              {users.map(user => (
+              {filteredUsers.map(user => (
                 <button
                   key={user.alias}
                   onClick={() => handleAssigneeSelect(user.alias)}
@@ -85,7 +106,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onFormat, onInsert, users }) => {
                   <span className="text-xs text-slate-400">@{user.alias}</span>
                 </button>
               ))}
-              {users.length === 0 && <p className="px-2 py-1 text-sm text-slate-400">No assignees found.</p>}
+              {filteredUsers.length === 0 && <p className="px-2 py-1 text-sm text-slate-400">No assignees found.</p>}
             </div>
           </div>
         )}

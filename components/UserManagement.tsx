@@ -130,7 +130,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
     };
 
     return (
-        <div className="p-8 overflow-y-auto h-full text-slate-200">
+        <div className="p-8 overflow-y-auto h-full text-slate-200 pb-24">
             <div className="max-w-5xl mx-auto">
                 <div className="bg-slate-800 rounded-lg p-6 mb-8">
                     <h2 className="text-2xl font-bold mb-4">Add New Assignee</h2>
