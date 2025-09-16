@@ -516,28 +516,28 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col">
-      <header className="py-4 px-8 border-b border-slate-700 bg-slate-900/70 backdrop-blur-sm sticky top-0 z-10 flex justify-between items-center">
-        <div>
-           <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-slate-100">Interactive Markdown Tasker</h1>
+      <header className="py-4 px-8 border-b border-slate-700 bg-slate-900/70 backdrop-blur-sm sticky top-0 z-10 flex flex-wrap justify-between items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-100">Interactive Markdown Tasker</h1>
+              <p className="text-slate-400 text-sm">
+                {getHeaderDescription()}
+              </p>
+            </div>
             {projects.length > 1 && (
-              <>
+            <div className="flex items-center gap-2 flex-shrink-0">
                 <ViewScopeToggle scope={viewScope} onScopeChange={setViewScope} />
                 {viewScope === 'single' && (
-                  <ProjectSwitcher 
+                <ProjectSwitcher 
                     projects={projects} 
                     selectedIndex={currentProjectIndex} 
                     onSelect={setCurrentProjectIndex} 
-                  />
+                />
                 )}
-              </>
+            </div>
             )}
-          </div>
-          <p className="text-slate-400">
-            {getHeaderDescription()}
-          </p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 flex-shrink-0">
           <nav className="flex space-x-2">
             <button
               onClick={() => setView('editor')}
@@ -578,7 +578,7 @@ const App: React.FC = () => {
           />
         </div>
       </header>
-      <main className="flex-grow h-[calc(100vh-125px)]">
+      <main className="flex-grow overflow-auto">
         {renderView()}
       </main>
       <footer className="text-center py-4 border-t border-slate-700 text-slate-500 text-sm">
