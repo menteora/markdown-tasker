@@ -173,8 +173,6 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
         });
         
         if (!updatesFound) {
-            // FIX: The `italics` property is not a valid IParagraphOptions property.
-            // It must be applied to a TextRun within the paragraph's children.
             reportChildren.push(new docx.Paragraph({
                 children: [
                     new docx.TextRun({
