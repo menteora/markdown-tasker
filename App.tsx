@@ -7,10 +7,11 @@ import type { User, Project, GroupedTasks, Task, Settings } from './types';
 import { useMarkdownParser } from './hooks/useMarkdownParser';
 import { INITIAL_USERS } from './constants';
 import saveAs from 'file-saver';
-import { ChevronsUpDown, Settings as SettingsIcon } from 'lucide-react';
+import { ChevronsUpDown, Settings as SettingsIcon, Pencil } from 'lucide-react';
 import { useSettings } from './hooks/useSettings';
 import SettingsModal from './components/SettingsModal';
 import EditableDocumentView from './components/EditableDocumentView';
+import FullDocumentEditor from './components/FullDocumentEditor';
 
 const initialMarkdown = `# Project Titan Launch 🚀
 
@@ -155,6 +156,8 @@ const App: React.FC = () => {
   const [viewScope, setViewScope] = useState<ViewScope>('all');
   const [settings, saveSettings] = useSettings();
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isFullEditMode, setIsFullEditMode] = useState(false);
+  const [fullEditContent, setFullEditContent] = useState('');
 
   const projects = useMarkdownParser(markdown, users);
   
@@ -171,7 +174,12 @@ const App: React.FC = () => {
     if (currentProjectIndex >= projects.length) {
       setCurrentProjectIndex(Math.max(0, projects.length - 1));
     }
+    setIsFullEditMode(false);
   }, [projects, currentProjectIndex]);
+
+  useEffect(() => {
+    setIsFullEditMode(false);
+  }, [viewScope]);
 
   const displayMarkdown = useMemo(() => {
     if (viewScope === 'single' && currentProjectIndex < projects.length) {
@@ -202,6 +210,32 @@ const App: React.FC = () => {
     return relativeLineIndex;
   }, [viewScope, currentProjectIndex, projects]);
 
+  const handleToggleFullEdit = useCallback(() => {
+    setFullEditContent(displayMarkdown);
+    setIsFullEditMode(true);
+  }, [displayMarkdown]);
+
+  const handleSaveFullEdit = useCallback(() => {
+    if (viewScope === 'all') {
+        setMarkdown(fullEditContent);
+    } else {
+        const project = projects[currentProjectIndex];
+        if (project) {
+            setMarkdown(prev => {
+                const lines = prev.split('\n');
+                const before = lines.slice(0, project.startLine);
+                const after = lines.slice(project.endLine + 1);
+                const newLines = fullEditContent.split('\n');
+                return [...before, ...newLines, ...after].join('\n');
+            });
+        }
+    }
+    setIsFullEditMode(false);
+  }, [fullEditContent, viewScope, currentProjectIndex, projects, setMarkdown]);
+
+  const handleCancelFullEdit = useCallback(() => {
+    setIsFullEditMode(false);
+  }, []);
 
   const currentProject = projects[currentProjectIndex] || { title: 'Project', groupedTasks: {}, unassignedTasks: [], totalCost: 0, startLine: 0, endLine: 0, headings: [] };
 
@@ -493,6 +527,9 @@ const App: React.FC = () => {
   }, [saveSettings]);
 
   const getHeaderDescription = () => {
+    if (isFullEditMode) {
+        return `Editing ${viewScope === 'all' ? 'the entire file' : `project: ${currentProject.title}`}.`;
+    }
     switch(view) {
       case 'editor':
         return 'Hover over a section to edit its content individually.';
@@ -507,6 +544,16 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (view) {
       case 'editor':
+        if (isFullEditMode) {
+          return (
+            <FullDocumentEditor
+              content={fullEditContent}
+              onChange={setFullEditContent}
+              onSave={handleSaveFullEdit}
+              onCancel={handleCancelFullEdit}
+            />
+          );
+        }
         return (
             <EditableDocumentView
               markdown={displayMarkdown}
@@ -557,7 +604,7 @@ const App: React.FC = () => {
                 {getHeaderDescription()}
               </p>
             </div>
-            {projects.length > 1 && (
+            {projects.length > 1 && !isFullEditMode && (
             <div className="flex items-center gap-2 flex-shrink-0">
                 <ViewScopeToggle scope={viewScope} onScopeChange={setViewScope} />
                 {viewScope === 'single' && (
@@ -591,6 +638,17 @@ const App: React.FC = () => {
               Manage Assignees
             </button>
           </nav>
+          {view === 'editor' && !isFullEditMode && (
+            <button 
+              onClick={handleToggleFullEdit}
+              className="px-3 py-2 rounded-md transition-colors font-semibold bg-slate-700 hover:bg-slate-600 flex items-center space-x-2"
+              aria-label={`Edit ${viewScope === 'all' ? 'entire file' : 'current project'}`}
+              title={`Edit ${viewScope === 'all' ? 'entire file' : 'current project'}`}
+            >
+              <Pencil className="w-4 h-4" />
+              <span>Edit {viewScope === 'all' ? 'Entire File' : 'Project'}</span>
+            </button>
+          )}
           <div className="w-px h-6 bg-slate-700 mx-2"></div>
            <button
               onClick={() => setIsSettingsModalOpen(true)}
