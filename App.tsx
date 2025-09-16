@@ -20,16 +20,16 @@ Use H1 headings (e.g., '# My Project') to create separate projects within this f
 
 ## Phase 1: Design
 
-- [ ] Wireframing and user flows (@alice) ($1500)
+- [ ] Wireframing and user flows !2024-08-10 (@alice) ($1500)
   - 2024-07-26: Initial sketches completed. (@alice)
   - 2024-07-27: Discussed with the product team, got feedback.
 - [x] UI/UX Design system (@alice) ~2024-07-20 ($2500)
-- [ ] Create brand style guide ($500)
+- [ ] Create brand style guide !2024-08-15 ($500)
 
 ## Phase 2: Development
 
-- [ ] Setup CI/CD pipeline (@bob) ($2000)
-- [ ] Develop core API endpoints (@charlie) ($4000)
+- [ ] Setup CI/CD pipeline !2024-09-01 (@bob) ($2000)
+- [ ] Develop core API endpoints !2024-08-25 (@charlie) ($4000)
 - [ ] Frontend component library (@diana) ($3500)
 - [ ] Implement user authentication ($1200)
 
@@ -39,12 +39,12 @@ This is a second project within the same file. You can switch between projects u
 
 ## Marketing & Outreach
 
-- [ ] Plan social media campaign (@ethan) ($1800)
+- [ ] Plan social media campaign !2024-10-15 (@ethan) ($1800)
 - [ ] Write blog posts for new features (@diana) ($750)
 
 ## Infrastructure Update
 
-- [ ] Migrate database to new server (@bob) ($3000)
+- [ ] Migrate database to new server !2024-11-01 (@bob) ($3000)
 - [ ] Update server dependencies ($400)`;
 
 type View = 'editor' | 'users' | 'overview';
@@ -420,6 +420,48 @@ const App: React.FC = () => {
     });
   }, [markdownOffset]);
 
+  const handleUpdateDueDate = useCallback((relativeLineIndex: number, newDate: string | null) => {
+    const lineIndex = relativeLineIndex + markdownOffset;
+    setMarkdown(prevMarkdown => {
+        const lines = prevMarkdown.split('\n');
+        if (lineIndex >= lines.length) return prevMarkdown;
+        let line = lines[lineIndex];
+
+        const dueDateRegex = /\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+        const assigneeRegex = /\s\(@[a-zA-Z0-9_]+\)/;
+        const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)$/;
+        const completionDateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
+        
+        const assigneeMatch = line.match(assigneeRegex);
+        const costMatch = line.match(costRegex);
+        const completionDateMatch = line.match(completionDateRegex);
+
+        let baseText = line
+            .replace(dueDateRegex, '')
+            .replace(assigneeRegex, '')
+            .replace(costRegex, '')
+            .replace(completionDateRegex, '')
+            .trim();
+
+        let newLine = baseText;
+        if (newDate) {
+            newLine += ` !${newDate}`;
+        }
+        if (assigneeMatch) {
+            newLine += assigneeMatch[0];
+        }
+        if (costMatch) {
+            newLine += costMatch[0];
+        }
+        if (completionDateMatch) {
+            newLine += completionDateMatch[0];
+        }
+
+        lines[lineIndex] = newLine;
+        return lines.join('\n');
+    });
+  }, [markdownOffset]);
+
   const handleUpdateCreationDate = useCallback((relativeLineIndex: number, newDate: string) => {
     const lineIndex = relativeLineIndex + markdownOffset;
     setMarkdown(prevMarkdown => {
@@ -604,6 +646,7 @@ const App: React.FC = () => {
               onToggle={handleToggle}
               onUpdateCompletionDate={handleUpdateCompletionDate}
               onUpdateCreationDate={handleUpdateCreationDate}
+              onUpdateDueDate={handleUpdateDueDate}
               onAddTaskUpdate={handleAddTaskUpdate}
               onUpdateTaskUpdate={handleUpdateTaskUpdate}
               onDeleteTaskUpdate={handleDeleteTaskUpdate}

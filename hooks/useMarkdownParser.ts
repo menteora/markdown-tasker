@@ -1,3 +1,4 @@
+
 import { useMemo } from 'react';
 import { User, Task, GroupedTasks, TaskUpdate, Project, Heading } from '../types';
 
@@ -58,6 +59,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
             const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
             const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)$/;
             const creationDateRegex = /\s\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+            const dueDateRegex = /\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/;
             const updateRegex = /^  - (\d{4}-\d{2}-\d{2}): (.*)/;
             
             let i = 0;
@@ -87,6 +89,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                     let completionDate: string | null = null;
                     let creationDate: string | null = null;
                     let cost: number | undefined = undefined;
+                    let dueDate: string | null = null;
 
                     const dateMatch = fullTaskText.match(dateRegex);
                     if (dateMatch) { completionDate = dateMatch[1]; fullTaskText = fullTaskText.replace(dateRegex, '').trim(); }
@@ -99,6 +102,9 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                     
                     const creationDateMatch = fullTaskText.match(creationDateRegex);
                     if (creationDateMatch) { creationDate = creationDateMatch[1]; fullTaskText = fullTaskText.replace(creationDateRegex, '').trim(); }
+
+                    const dueDateMatch = fullTaskText.match(dueDateRegex);
+                    if (dueDateMatch) { dueDate = dueDateMatch[1]; fullTaskText = fullTaskText.replace(dueDateRegex, '').trim(); }
 
                     const updates: TaskUpdate[] = [];
                     let j = i + 1;
@@ -131,6 +137,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                         assigneeAlias,
                         creationDate,
                         completionDate,
+                        dueDate,
                         updates,
                         projectTitle: boundary.title,
                         cost,

@@ -1,6 +1,7 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { User, TaskUpdate, Heading } from '../types';
-import { Pencil, Trash2, MessageSquarePlus, X, User as UserIcon, ChevronsUpDown, Mail } from 'lucide-react';
+import { Pencil, Trash2, MessageSquarePlus, X, User as UserIcon, ChevronsUpDown, Mail, CalendarDays } from 'lucide-react';
 
 const parseInlineMarkdown = (text: string): React.ReactNode[] => {
   const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);
@@ -27,7 +28,7 @@ const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => {
 
 const UserPlusIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125v-1.5c0-.621.504-1.125 1.125-1.125H20.625c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125H3.375Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125v-1.5c0-.621.504-1.125 1.125-1.125H20.625c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504-1.125-1.125-1.125H3.375Z" />
   </svg>
 );
 
@@ -66,7 +67,7 @@ const GmailLinkModal: React.FC<{
         </div>
         <form onSubmit={handleSubmit}>
           <label htmlFor="subject-input-preview" className="block text-sm font-medium text-slate-300 mb-2">
-            Email Subject
+            Enter the Gmail email subject here
           </label>
           <input
             ref={inputRef}
@@ -335,11 +336,12 @@ const TaskUpdateItem: React.FC<{
 };
 
 interface InteractiveTaskItemProps {
-  lineIndex: number; text: string; completed: boolean; assignee: User | null; creationDate: string | null; completionDate: string | null; updates: TaskUpdate[]; cost?: number;
+  lineIndex: number; text: string; completed: boolean; assignee: User | null; creationDate: string | null; completionDate: string | null; dueDate: string | null; updates: TaskUpdate[]; cost?: number;
   onToggle: (lineIndex: number, isCompleted: boolean) => void;
   onAssign: (lineIndex: number, userAlias: string | null) => void;
   onUpdateCompletionDate: (lineIndex: number, newDate: string) => void;
   onUpdateCreationDate: (lineIndex: number, newDate: string) => void;
+  onUpdateDueDate: (lineIndex: number, newDate: string | null) => void;
   onAddTaskUpdate: (taskLineIndex: number, updateText: string, assigneeAlias: string | null) => void;
   onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
   onDeleteTaskUpdate: (updateLineIndex: number) => void;
@@ -347,7 +349,7 @@ interface InteractiveTaskItemProps {
 }
 
 const InteractiveTaskItem: React.FC<InteractiveTaskItemProps> = (props) => {
-  const { lineIndex, text, completed, assignee, creationDate, completionDate, updates, cost, onToggle, onAssign, onUpdateCompletionDate, onUpdateCreationDate, onAddTaskUpdate, onUpdateTaskUpdate, onDeleteTaskUpdate, users } = props;
+  const { lineIndex, text, completed, assignee, creationDate, completionDate, dueDate, updates, cost, onToggle, onAssign, onUpdateCompletionDate, onUpdateCreationDate, onUpdateDueDate, onAddTaskUpdate, onUpdateTaskUpdate, onDeleteTaskUpdate, users } = props;
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -377,6 +379,22 @@ const InteractiveTaskItem: React.FC<InteractiveTaskItemProps> = (props) => {
     setIsDropdownOpen(false);
   };
   
+  const getDueDateInfo = (dateString: string | null, isCompleted: boolean): { color: string, label: string } => {
+      if (!dateString || isCompleted) return { color: 'text-slate-400', label: 'Due date not set or task completed' };
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(`${dateString}T00:00:00`);
+      
+      const diffTime = due.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 0) return { color: 'text-red-500', label: `Overdue by ${Math.abs(diffDays)} day(s)` };
+      if (diffDays === 0) return { color: 'text-yellow-400', label: 'Due today' };
+      return { color: 'text-slate-400', label: `Due in ${diffDays} day(s)` };
+  };
+  
+  const dueDateInfo = getDueDateInfo(dueDate, completed);
+
   return (
     <div className="py-2 border-b border-slate-800">
         <div className="flex items-center space-x-3 group">
@@ -389,6 +407,18 @@ const InteractiveTaskItem: React.FC<InteractiveTaskItemProps> = (props) => {
                 </span>
               )}
             </span>
+             {!completed && (
+                <div title={dueDateInfo.label} className={`flex items-center space-x-1 ${dueDate ? '' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
+                    <CalendarDays className={`w-4 h-4 flex-shrink-0 ${dueDateInfo.color}`} />
+                    <input 
+                        type="date" 
+                        value={dueDate ?? ''} 
+                        onChange={(e) => onUpdateDueDate(lineIndex, e.target.value || null)} 
+                        className={`bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none ${dueDateInfo.color}`}
+                        aria-label="Due Date"
+                    />
+                </div>
+            )}
              {creationDate && !completed && (
                 <input type="date" value={creationDate} onChange={(e) => onUpdateCreationDate(lineIndex, e.target.value)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none" aria-label="Creation Date"/>
             )}
@@ -456,6 +486,7 @@ interface PreviewProps {
   onAssign: (lineIndex: number, userAlias: string | null) => void;
   onUpdateCompletionDate: (lineIndex: number, newDate: string) => void;
   onUpdateCreationDate: (lineIndex: number, newDate: string) => void;
+  onUpdateDueDate: (lineIndex: number, newDate: string | null) => void;
   onAddTaskUpdate: (taskLineIndex: number, updateText: string, assigneeAlias: string | null) => void;
   onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
   onDeleteTaskUpdate: (updateLineIndex: number) => void;
@@ -503,6 +534,7 @@ const Preview: React.FC<PreviewProps> = (props) => {
         let completionDate: string | null = null;
         let creationDate: string | null = null;
         let cost: number | undefined = undefined;
+        let dueDate: string | null = null;
         
         const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
         const dateMatch = fullTaskText.match(dateRegex);
@@ -533,6 +565,12 @@ const Preview: React.FC<PreviewProps> = (props) => {
             fullTaskText = fullTaskText.replace(creationDateRegex, '').trim();
         }
 
+        const dueDateRegex = /\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+        const dueDateMatch = fullTaskText.match(dueDateRegex);
+        if (dueDateMatch) {
+            dueDate = dueDateMatch[1];
+            fullTaskText = fullTaskText.replace(dueDateRegex, '').trim();
+        }
 
         const updates: TaskUpdate[] = [];
         let j = i + 1;
@@ -565,7 +603,7 @@ const Preview: React.FC<PreviewProps> = (props) => {
         }
 
         elements.push(
-          <InteractiveTaskItem key={i} lineIndex={i} text={fullTaskText} completed={taskMatch[1] === 'x'} assignee={assignee} creationDate={creationDate} completionDate={completionDate} updates={updates} cost={cost} {...props} />
+          <InteractiveTaskItem key={i} lineIndex={i} text={fullTaskText} completed={taskMatch[1] === 'x'} assignee={assignee} creationDate={creationDate} completionDate={completionDate} dueDate={dueDate} updates={updates} cost={cost} {...props} />
         );
         i = j;
         continue;
