@@ -354,10 +354,11 @@ interface PreviewProps {
   onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
   onDeleteTaskUpdate: (updateLineIndex: number) => void;
   users: User[];
+  forwardedRef: React.RefObject<HTMLDivElement>;
 }
 
 const Preview: React.FC<PreviewProps> = (props) => {
-  const { markdown, users } = props;
+  const { markdown, users, forwardedRef } = props;
   const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
   
   const renderSimpleMarkdownLine = (line: string, index: number) => {
@@ -459,7 +460,7 @@ const Preview: React.FC<PreviewProps> = (props) => {
   };
 
   return (
-    <div className="h-full p-8 overflow-y-auto prose-invert pb-32">
+    <div ref={forwardedRef} className="h-full p-8 overflow-y-auto prose-invert pb-32">
       {renderContent()}
     </div>
   );

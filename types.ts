@@ -42,7 +42,9 @@ export interface Project {
 
 export interface Settings {
   senderAlias: string | null;
+  emailSubject: string;
   emailPreamble: string;
   emailPostamble: string;
+  emailSignature: string;
   reminderMessage: string;
 }

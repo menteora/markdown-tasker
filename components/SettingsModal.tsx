@@ -75,6 +75,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
           </div>
 
           <div>
+            <label htmlFor="emailSubject" className="block text-sm font-medium text-slate-300 mb-1">Email Subject</label>
+            <p className="text-xs text-slate-500 mb-2">Use <code className="bg-slate-900 px-1 rounded">{'{projectTitle}'}</code> as a placeholder for the project title.</p>
+            <input
+              type="text"
+              id="emailSubject"
+              name="emailSubject"
+              value={currentSettings.emailSubject}
+              onChange={handleChange}
+              className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+
+          <div>
             <label htmlFor="emailPreamble" className="block text-sm font-medium text-slate-300 mb-1">Email Preamble</label>
             <p className="text-xs text-slate-500 mb-2">Text to appear before the task list. Use <code className="bg-slate-900 px-1 rounded">{'{userName}'}</code> as a placeholder for the assignee's name.</p>
             <textarea
@@ -95,6 +108,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
               name="emailPostamble"
               rows={3}
               value={currentSettings.emailPostamble}
+              onChange={handleChange}
+              className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="emailSignature" className="block text-sm font-medium text-slate-300 mb-1">Email Signature</label>
+            <p className="text-xs text-slate-500 mb-2">Use <code className="bg-slate-900 px-1 rounded">{'{senderName}'}</code> as a placeholder for the reminder assignee's name.</p>
+            <input
+              type="text"
+              id="emailSignature"
+              name="emailSignature"
+              value={currentSettings.emailSignature}
               onChange={handleChange}
               className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
             />

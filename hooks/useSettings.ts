@@ -5,8 +5,10 @@ const SETTINGS_KEY = 'md-tasker-email-settings';
 
 const DEFAULT_SETTINGS: Settings = {
   senderAlias: null,
+  emailSubject: 'Task Update for project: {projectTitle}',
   emailPreamble: 'Hi {userName},\n\nThis is a friendly reminder about your outstanding tasks for the project. Please see the list below:',
   emailPostamble: 'Please provide an update when you can.\n\nBest regards,',
+  emailSignature: '{senderName}',
   reminderMessage: 'Reminder sent.',
 };
 
