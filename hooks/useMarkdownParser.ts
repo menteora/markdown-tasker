@@ -30,6 +30,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
             const assigneeRegex = /\s\(@([a-zA-Z0-9_]+)\)/;
             const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
             const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)$/;
+            const creationDateRegex = /\s\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
             const updateRegex = /^  - (\d{4}-\d{2}-\d{2}): (.*)/;
             
             let i = 0;
@@ -42,6 +43,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                     let fullTaskText = taskMatch[2];
                     let assigneeAlias: string | null = null;
                     let completionDate: string | null = null;
+                    let creationDate: string | null = null;
                     let cost: number | undefined = undefined;
 
                     const dateMatch = fullTaskText.match(dateRegex);
@@ -52,6 +54,9 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
 
                     const assigneeMatch = fullTaskText.match(assigneeRegex);
                     if (assigneeMatch) { assigneeAlias = assigneeMatch[1]; fullTaskText = fullTaskText.replace(assigneeRegex, '').trim(); }
+                    
+                    const creationDateMatch = fullTaskText.match(creationDateRegex);
+                    if (creationDateMatch) { creationDate = creationDateMatch[1]; fullTaskText = fullTaskText.replace(creationDateRegex, '').trim(); }
 
                     const updates: TaskUpdate[] = [];
                     let j = i + 1;
@@ -82,6 +87,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                         text: fullTaskText,
                         completed: taskMatch[1] === 'x',
                         assigneeAlias,
+                        creationDate,
                         completionDate,
                         updates,
                         projectTitle: boundary.title,

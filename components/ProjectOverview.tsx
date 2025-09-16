@@ -61,6 +61,11 @@ const TaskItem: React.FC<{ task: Task; viewScope: ViewScope }> = ({ task, viewSc
           </span>
        )}
       {viewScope === 'all' && <span className="block text-xs text-indigo-400 font-medium">{task.projectTitle}</span>}
+      {task.creationDate && (
+        <span className="block text-xs text-slate-400">
+          Created: {task.creationDate}
+        </span>
+      )}
       {task.completed && task.completionDate && (
         <span className="block text-xs text-slate-400">
           Completed: {task.completionDate}
@@ -227,7 +232,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassig
   const unassignedCost = unassignedTasks.reduce((sum, task) => sum + (task.cost ?? 0), 0);
 
   return (
-    <div className="p-8 overflow-y-auto h-full">
+    <div className="p-8 overflow-y-auto h-full pb-24">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatCard icon={<ListChecks className="h-6 w-6 text-white"/>} title="Total Tasks" value={`${totalTasks}`} color="bg-blue-500" />
             <StatCard icon={<CheckCircle2 className="h-6 w-6 text-white"/>} title="Completed" value={`${completedTasks}`} color="bg-green-500" />

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Editor from './components/Editor';
 import Preview from './components/Preview';
@@ -300,6 +301,25 @@ const App: React.FC = () => {
     });
   }, [markdownOffset]);
 
+  const handleUpdateCreationDate = useCallback((relativeLineIndex: number, newDate: string) => {
+    const lineIndex = relativeLineIndex + markdownOffset;
+    setMarkdown(prevMarkdown => {
+        const lines = prevMarkdown.split('\n');
+        if (lineIndex >= lines.length) return prevMarkdown;
+        const line = lines[lineIndex];
+        const dateRegex = /\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+        
+        if (dateRegex.test(line)) {
+            lines[lineIndex] = line.replace(dateRegex, `+${newDate}`);
+        } else {
+            // Add if it doesn't exist
+             const taskPrefixRegex = /^- \[( |x)\] /;
+            lines[lineIndex] = line.replace(taskPrefixRegex, `$&+${newDate} `);
+        }
+        return lines.join('\n');
+    });
+  }, [markdownOffset]);
+
   const handleAddTaskUpdate = useCallback((relativeTaskLineIndex: number, updateText: string, assigneeAlias: string | null) => {
     const taskLineIndex = relativeTaskLineIndex + markdownOffset;
     setMarkdown(prevMarkdown => {
@@ -461,6 +481,7 @@ const App: React.FC = () => {
               onAssign={handleAssign}
               onToggle={handleToggle}
               onUpdateCompletionDate={handleUpdateCompletionDate}
+              onUpdateCreationDate={handleUpdateCreationDate}
               onAddTaskUpdate={handleAddTaskUpdate}
               onUpdateTaskUpdate={handleUpdateTaskUpdate}
               onDeleteTaskUpdate={handleDeleteTaskUpdate}
@@ -494,7 +515,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white font-sans">
+    <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col">
       <header className="py-4 px-8 border-b border-slate-700 bg-slate-900/70 backdrop-blur-sm sticky top-0 z-10 flex justify-between items-center">
         <div>
            <div className="flex items-center gap-4">
@@ -557,9 +578,12 @@ const App: React.FC = () => {
           />
         </div>
       </header>
-      <main className="h-[calc(100vh-85px)]">
+      <main className="flex-grow h-[calc(100vh-125px)]">
         {renderView()}
       </main>
+      <footer className="text-center py-4 border-t border-slate-700 text-slate-500 text-sm">
+        Interactive Markdown Tasker
+      </footer>
       <SettingsModal 
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}

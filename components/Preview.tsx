@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { User, TaskUpdate } from '../types';
-import { Pencil, Trash2, MessageSquarePlus, X, User as UserIcon } from 'lucide-react';
+import { Pencil, Trash2, MessageSquarePlus, X, User as UserIcon, ChevronsUpDown } from 'lucide-react';
 
 const parseInlineMarkdown = (text: string): React.ReactNode[] => {
   const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);
@@ -35,10 +35,19 @@ const AddUpdateForm: React.FC<{ onAdd: (text: string, assigneeAlias: string | nu
     const [text, setText] = useState('');
     const [assigneeAlias, setAssigneeAlias] = useState<string | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     
     const assignee = useMemo(() => users.find(u => u.alias === assigneeAlias), [users, assigneeAlias]);
+
+     const filteredUsers = useMemo(() => {
+        if (!searchTerm) return users;
+        return users.filter(user => 
+            user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            user.alias.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [users, searchTerm]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -56,6 +65,10 @@ const AddUpdateForm: React.FC<{ onAdd: (text: string, assigneeAlias: string | nu
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        if (!isDropdownOpen) setSearchTerm('');
+    }, [isDropdownOpen]);
 
     const handleSelect = (alias: string | null) => {
         setAssigneeAlias(alias);
@@ -75,18 +88,28 @@ const AddUpdateForm: React.FC<{ onAdd: (text: string, assigneeAlias: string | nu
                     {assignee ? <img src={assignee.avatarUrl} alt={assignee.name} className="h-5 w-5 rounded-full" /> : <UserIcon className="h-5 w-5 text-slate-400" />}
                 </button>
                 {isDropdownOpen && (
-                     <div className="absolute right-0 bottom-full mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20">
+                     <div className="absolute right-0 bottom-full mb-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20">
                         <div className="p-1">
-                        {users.map(user => (
-                            <button type="button" key={user.alias} onClick={() => handleSelect(user.alias)} className="w-full text-left flex items-center space-x-2 px-2 py-1.5 rounded-md hover:bg-slate-700">
-                                <img src={user.avatarUrl} alt={user.name} className="h-5 w-5 rounded-full" />
-                                <span className="text-sm text-slate-200">{user.name}</span>
+                            <input
+                                type="text"
+                                placeholder="Search assignee..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full sticky top-0 mb-1 px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-md text-slate-200 focus:ring-1 focus:ring-indigo-500 outline-none"
+                            />
+                            <div className="max-h-48 overflow-y-auto">
+                                {filteredUsers.map(user => (
+                                    <button type="button" key={user.alias} onClick={() => handleSelect(user.alias)} className="w-full text-left flex items-center space-x-2 px-2 py-1.5 rounded-md hover:bg-slate-700">
+                                        <img src={user.avatarUrl} alt={user.name} className="h-5 w-5 rounded-full" />
+                                        <span className="text-sm text-slate-200">{user.name}</span>
+                                    </button>
+                                ))}
+                                {filteredUsers.length === 0 && <p className="px-2 py-1 text-sm text-slate-400">No users found.</p>}
+                            </div>
+                            {(assignee || searchTerm) && <div className="border-t border-slate-700 my-1"></div>}
+                            <button type="button" onClick={() => handleSelect(null)} className="w-full text-left text-sm text-slate-400 px-2 py-1.5 rounded-md hover:bg-slate-700">
+                                No Assignee
                             </button>
-                        ))}
-                        {assignee && <div className="border-t border-slate-700 my-1"></div>}
-                        <button type="button" onClick={() => handleSelect(null)} className="w-full text-left text-sm text-slate-400 px-2 py-1.5 rounded-md hover:bg-slate-700">
-                            No Assignee
-                        </button>
                         </div>
                     </div>
                 )}
@@ -111,9 +134,36 @@ const TaskUpdateItem: React.FC<{
     const [date, setDate] = useState(update.date);
     const [text, setText] = useState(update.text);
     const [alias, setAlias] = useState(update.assigneeAlias);
+    const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const assigneeDropdownRef = useRef<HTMLDivElement>(null);
+
     const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
     const assignee = update.assigneeAlias ? userByAlias.get(update.assigneeAlias) : null;
+    const currentAssignee = useMemo(() => users.find(u => u.alias === alias), [users, alias]);
     
+    const filteredUsers = useMemo(() => {
+        if (!searchTerm) return users;
+        return users.filter(user => 
+            user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            user.alias.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [users, searchTerm]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (assigneeDropdownRef.current && !assigneeDropdownRef.current.contains(event.target as Node)) {
+                setIsAssigneeDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        if (!isAssigneeDropdownOpen) setSearchTerm('');
+    }, [isAssigneeDropdownOpen]);
+
     const handleSave = () => {
         if (text.trim()){
             onUpdate(update.lineIndex, date, text.trim(), alias);
@@ -126,10 +176,40 @@ const TaskUpdateItem: React.FC<{
             <div className="flex items-center space-x-2 text-sm w-full">
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none w-32"/>
                 <input type="text" value={text} onChange={(e) => setText(e.target.value)} className="flex-grow bg-slate-700 border border-slate-600 rounded-md p-1 text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none"/>
-                <select value={alias ?? ''} onChange={e => setAlias(e.target.value || null)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none">
-                    <option value="">No Assignee</option>
-                    {users.map(u => <option key={u.alias} value={u.alias}>{u.name}</option>)}
-                </select>
+                
+                <div className="relative" ref={assigneeDropdownRef}>
+                    <button type="button" onClick={() => setIsAssigneeDropdownOpen(p => !p)} className="flex items-center justify-between bg-slate-700 border border-slate-600 rounded-md p-1 text-slate-300 w-40 text-left">
+                        <span className="truncate">{currentAssignee?.name ?? 'No Assignee'}</span>
+                        <ChevronsUpDown className="w-4 h-4 text-slate-400 ml-1 flex-shrink-0" />
+                    </button>
+                    {isAssigneeDropdownOpen && (
+                        <div className="absolute left-0 mt-1 w-52 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20">
+                            <div className="p-1">
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full sticky top-0 mb-1 px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-md text-slate-200 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                />
+                                <div className="max-h-40 overflow-y-auto">
+                                    {filteredUsers.map(u => (
+                                        <button type="button" key={u.alias} onClick={() => { setAlias(u.alias); setIsAssigneeDropdownOpen(false); }} className="w-full text-left flex items-center space-x-2 px-2 py-1.5 rounded-md hover:bg-slate-700">
+                                            <img src={u.avatarUrl} alt={u.name} className="h-5 w-5 rounded-full" />
+                                            <span className="text-sm text-slate-200">{u.name}</span>
+                                        </button>
+                                    ))}
+                                    {filteredUsers.length === 0 && <p className="px-2 py-1 text-sm text-slate-400">No users found.</p>}
+                                </div>
+                                <div className="border-t border-slate-700 my-1"></div>
+                                <button type="button" onClick={() => { setAlias(null); setIsAssigneeDropdownOpen(false); }} className="w-full text-left text-sm text-slate-400 px-2 py-1.5 rounded-md hover:bg-slate-700">
+                                    No Assignee
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 <button onClick={handleSave} className="p-1.5 rounded-md bg-green-600 hover:bg-green-700 transition-colors">Save</button>
                 <button onClick={() => setIsEditing(false)} className="p-1.5 rounded-md bg-slate-600 hover:bg-slate-500 transition-colors"><X className="w-4 h-4" /></button>
             </div>
@@ -150,10 +230,11 @@ const TaskUpdateItem: React.FC<{
 };
 
 interface InteractiveTaskItemProps {
-  lineIndex: number; text: string; completed: boolean; assignee: User | null; completionDate: string | null; updates: TaskUpdate[]; cost?: number;
+  lineIndex: number; text: string; completed: boolean; assignee: User | null; creationDate: string | null; completionDate: string | null; updates: TaskUpdate[]; cost?: number;
   onToggle: (lineIndex: number, isCompleted: boolean) => void;
   onAssign: (lineIndex: number, userAlias: string | null) => void;
   onUpdateCompletionDate: (lineIndex: number, newDate: string) => void;
+  onUpdateCreationDate: (lineIndex: number, newDate: string) => void;
   onAddTaskUpdate: (taskLineIndex: number, updateText: string, assigneeAlias: string | null) => void;
   onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
   onDeleteTaskUpdate: (updateLineIndex: number) => void;
@@ -161,9 +242,18 @@ interface InteractiveTaskItemProps {
 }
 
 const InteractiveTaskItem: React.FC<InteractiveTaskItemProps> = (props) => {
-  const { lineIndex, text, completed, assignee, completionDate, updates, cost, onToggle, onAssign, onUpdateCompletionDate, onAddTaskUpdate, onUpdateTaskUpdate, onDeleteTaskUpdate, users } = props;
+  const { lineIndex, text, completed, assignee, creationDate, completionDate, updates, cost, onToggle, onAssign, onUpdateCompletionDate, onUpdateCreationDate, onAddTaskUpdate, onUpdateTaskUpdate, onDeleteTaskUpdate, users } = props;
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const filteredUsers = useMemo(() => {
+    if (!searchTerm) return users;
+    return users.filter(user => 
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        user.alias.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [users, searchTerm]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -172,6 +262,10 @@ const InteractiveTaskItem: React.FC<InteractiveTaskItemProps> = (props) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!isDropdownOpen) setSearchTerm('');
+  }, [isDropdownOpen]);
 
   const handleSelect = (userAlias: string | null) => {
     onAssign(lineIndex, userAlias);
@@ -190,6 +284,9 @@ const InteractiveTaskItem: React.FC<InteractiveTaskItemProps> = (props) => {
                 </span>
               )}
             </span>
+             {creationDate && !completed && (
+                <input type="date" value={creationDate} onChange={(e) => onUpdateCreationDate(lineIndex, e.target.value)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none" aria-label="Creation Date"/>
+            )}
             {completed && completionDate && (
                 <input type="date" value={completionDate} onChange={(e) => onUpdateCompletionDate(lineIndex, e.target.value)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none" aria-label="Completion Date"/>
             )}
@@ -210,13 +307,21 @@ const InteractiveTaskItem: React.FC<InteractiveTaskItemProps> = (props) => {
                 {isDropdownOpen && (
                     <div ref={dropdownRef} className="absolute right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20">
                         <div className="p-2">
+                        <input
+                            type="text"
+                            placeholder="Search assignee..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full mb-2 px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-md text-slate-200 focus:ring-1 focus:ring-indigo-500 outline-none"
+                        />
                         <div className="text-xs text-slate-400 px-2 pb-1 font-semibold">Assign to...</div>
-                        {users.map(user => (
+                        {filteredUsers.map(user => (
                             <button key={user.alias} onClick={() => handleSelect(user.alias)} className="w-full text-left flex items-center space-x-2 px-2 py-1.5 rounded-md hover:bg-slate-700">
                                 <img src={user.avatarUrl} alt={user.name} className="h-6 w-6 rounded-full" />
                                 <span className="text-sm text-slate-200">{user.name}</span>
                             </button>
                         ))}
+                        {filteredUsers.length === 0 && <p className="px-2 py-1 text-sm text-slate-400">No users found.</p>}
                         <div className="border-t border-slate-700 my-1"></div>
                         <button onClick={() => handleSelect(null)} className="w-full text-left text-sm text-slate-400 px-2 py-1.5 rounded-md hover:bg-slate-700">Unassign</button>
                         </div>
@@ -244,6 +349,7 @@ interface PreviewProps {
   onToggle: (lineIndex: number, isCompleted: boolean) => void;
   onAssign: (lineIndex: number, userAlias: string | null) => void;
   onUpdateCompletionDate: (lineIndex: number, newDate: string) => void;
+  onUpdateCreationDate: (lineIndex: number, newDate: string) => void;
   onAddTaskUpdate: (taskLineIndex: number, updateText: string, assigneeAlias: string | null) => void;
   onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
   onDeleteTaskUpdate: (updateLineIndex: number) => void;
@@ -276,6 +382,7 @@ const Preview: React.FC<PreviewProps> = (props) => {
         let fullTaskText = taskMatch[2];
         let assignee: User | null = null;
         let completionDate: string | null = null;
+        let creationDate: string | null = null;
         let cost: number | undefined = undefined;
         
         const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
@@ -299,6 +406,14 @@ const Preview: React.FC<PreviewProps> = (props) => {
           assignee = userByAlias.get(alias) || null;
           fullTaskText = fullTaskText.replace(assigneeRegex, '').trim();
         }
+        
+        const creationDateRegex = /\s\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+        const creationDateMatch = fullTaskText.match(creationDateRegex);
+        if (creationDateMatch) {
+            creationDate = creationDateMatch[1];
+            fullTaskText = fullTaskText.replace(creationDateRegex, '').trim();
+        }
+
 
         const updates: TaskUpdate[] = [];
         let j = i + 1;
@@ -331,7 +446,7 @@ const Preview: React.FC<PreviewProps> = (props) => {
         }
 
         elements.push(
-          <InteractiveTaskItem key={i} lineIndex={i} text={fullTaskText} completed={taskMatch[1] === 'x'} assignee={assignee} completionDate={completionDate} updates={updates} cost={cost} {...props} />
+          <InteractiveTaskItem key={i} lineIndex={i} text={fullTaskText} completed={taskMatch[1] === 'x'} assignee={assignee} creationDate={creationDate} completionDate={completionDate} updates={updates} cost={cost} {...props} />
         );
         i = j;
         continue;
@@ -344,7 +459,7 @@ const Preview: React.FC<PreviewProps> = (props) => {
   };
 
   return (
-    <div className="h-full p-8 overflow-y-auto prose-invert">
+    <div className="h-full p-8 overflow-y-auto prose-invert pb-32">
       {renderContent()}
     </div>
   );
