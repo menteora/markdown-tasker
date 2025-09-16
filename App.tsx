@@ -1,12 +1,11 @@
 
-
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Editor from './components/Editor';
 import Preview from './components/Preview';
 import UserManagement from './components/UserManagement';
 import ProjectOverview from './components/ProjectOverview';
 import ProjectActions from './components/ProjectActions';
-import type { User, Project, GroupedTasks, Task, Settings } from './types';
+import type { User, Project, GroupedTasks, Task, Settings, Heading } from './types';
 import { useMarkdownParser } from './hooks/useMarkdownParser';
 import { INITIAL_USERS } from './constants';
 import saveAs from 'file-saver';
@@ -160,7 +159,8 @@ const App: React.FC = () => {
   
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
-  const scrollSource = useRef<'editor' | 'preview' | null>(null);
+  const sizerRef = useRef<HTMLDivElement>(null);
+  const scrollSource = useRef<'editor' | 'preview' | 'programmatic' | null>(null);
 
   const projects = useMarkdownParser(markdown, users);
   
@@ -183,11 +183,11 @@ const App: React.FC = () => {
     const editor = editorRef.current;
     const preview = previewRef.current;
 
-    if (!editor || !preview) return;
+    if (!editor || !preview || view !== 'editor') return;
 
     const handleEditorScroll = () => {
-        if (scrollSource.current === 'preview') {
-            scrollSource.current = null;
+        if (scrollSource.current === 'preview' || scrollSource.current === 'programmatic') {
+            if(scrollSource.current !== 'programmatic') scrollSource.current = null;
             return;
         }
         scrollSource.current = 'editor';
@@ -197,8 +197,8 @@ const App: React.FC = () => {
     };
 
     const handlePreviewScroll = () => {
-        if (scrollSource.current === 'editor') {
-            scrollSource.current = null;
+        if (scrollSource.current === 'editor' || scrollSource.current === 'programmatic') {
+             if(scrollSource.current !== 'programmatic') scrollSource.current = null;
             return;
         }
         scrollSource.current = 'preview';
@@ -216,22 +216,100 @@ const App: React.FC = () => {
     };
   }, [view]);
 
-  const { displayMarkdown, markdownOffset } = useMemo(() => {
+  const { displayMarkdown, markdownOffset, displayHeadings } = useMemo(() => {
     if (viewScope === 'single' && currentProjectIndex < projects.length) {
       const project = projects[currentProjectIndex];
       const lines = markdown.split('\n');
       return {
         displayMarkdown: lines.slice(project.startLine, project.endLine + 1).join('\n'),
         markdownOffset: project.startLine,
+        displayHeadings: project.headings.map(h => ({ ...h, line: h.line - project.startLine })),
       };
     }
+    const allHeadings = projects.flatMap(p => p.headings);
     return {
       displayMarkdown: markdown,
       markdownOffset: 0,
+      displayHeadings: allHeadings,
     };
   }, [markdown, viewScope, currentProjectIndex, projects]);
+  
+  const handleEditorHeadingClick = useCallback((relativeLine: number) => {
+      scrollSource.current = 'programmatic';
+      const absoluteLine = relativeLine + markdownOffset;
+      const allHeadings = projects.flatMap(p => p.headings);
+      const heading = allHeadings.find(h => h.line === absoluteLine);
+      
+      if (heading && previewRef.current) {
+          const element = previewRef.current.querySelector(`#${heading.slug}`);
+          if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+      }
+      setTimeout(() => { scrollSource.current = null; }, 500);
+  }, [markdownOffset, projects]);
 
-  const currentProject = projects[currentProjectIndex] || { title: 'Project', groupedTasks: {}, unassignedTasks: [], totalCost: 0, startLine: 0, endLine: 0 };
+  const handlePreviewHeadingClick = useCallback((slug: string) => {
+      scrollSource.current = 'programmatic';
+      const allHeadings = projects.flatMap(p => p.headings);
+      const heading = allHeadings.find(h => h.slug === slug);
+
+      if (heading && editorRef.current && sizerRef.current) {
+          const editor = editorRef.current;
+          const sizer = sizerRef.current;
+          const lines = editor.value.split('\n');
+          const lineInEditor = heading.line - markdownOffset;
+          
+          // Match sizer width to editor's inner content width to ensure correct line wrapping
+          const editorStyle = window.getComputedStyle(editor);
+          sizer.style.width = editorStyle.width;
+
+          const textToMeasure = lines.slice(0, lineInEditor).join('\n');
+          // Use textContent to avoid HTML injection and properly render newlines
+          sizer.textContent = textToMeasure;
+
+          // Use sizer's height to get precise scroll position
+          const targetScrollTop = sizer.scrollHeight;
+
+          const startScrollTop = editor.scrollTop;
+          const distance = targetScrollTop - startScrollTop;
+          
+          if (Math.abs(distance) < 1) {
+              setTimeout(() => { scrollSource.current = null; }, 300);
+              return;
+          }
+
+          const duration = 300; // ms for smooth animation
+          let startTime: number | null = null;
+          
+          const easeInOutQuad = (t: number, b: number, c: number, d: number): number => {
+              t /= d / 2;
+              if (t < 1) return c / 2 * t * t + b;
+              t--;
+              return -c / 2 * (t * (t - 2) - 1) + b;
+          };
+
+          const animateScroll = (timestamp: number) => {
+              if (!editorRef.current) return;
+              if (!startTime) startTime = timestamp;
+              const progress = timestamp - startTime;
+              
+              editorRef.current.scrollTop = easeInOutQuad(progress, startScrollTop, distance, duration);
+              
+              if (progress < duration) {
+                  requestAnimationFrame(animateScroll);
+              } else {
+                  editorRef.current.scrollTop = targetScrollTop; // Ensure it lands on the exact spot
+              }
+          };
+          
+          requestAnimationFrame(animateScroll);
+      }
+      setTimeout(() => { scrollSource.current = null; }, 500);
+  }, [projects, markdownOffset]);
+
+
+  const currentProject = projects[currentProjectIndex] || { title: 'Project', groupedTasks: {}, unassignedTasks: [], totalCost: 0, startLine: 0, endLine: 0, headings: [] };
 
   const aggregatedData = useMemo(() => {
       const allGroupedTasks: GroupedTasks = users.reduce((acc, user) => {
@@ -517,9 +595,11 @@ const App: React.FC = () => {
               onChange={handleEditorChange} 
               users={users}
               forwardedRef={editorRef}
+              onHeadingClick={handleEditorHeadingClick}
             />
             <Preview 
               markdown={displayMarkdown}
+              headings={displayHeadings}
               onAssign={handleAssign}
               onToggle={handleToggle}
               onUpdateCompletionDate={handleUpdateCompletionDate}
@@ -527,6 +607,7 @@ const App: React.FC = () => {
               onAddTaskUpdate={handleAddTaskUpdate}
               onUpdateTaskUpdate={handleUpdateTaskUpdate}
               onDeleteTaskUpdate={handleDeleteTaskUpdate}
+              onHeadingClick={handlePreviewHeadingClick}
               users={users}
               forwardedRef={previewRef}
             />
@@ -634,6 +715,11 @@ const App: React.FC = () => {
         onSave={saveSettings}
         users={users}
       />
+      <div
+         ref={sizerRef}
+         className="absolute -top-[9999px] -left-[9999px] p-4 font-mono text-slate-300 text-sm leading-relaxed border border-slate-700"
+         style={{ whiteSpace: 'pre-wrap', visibility: 'hidden', boxSizing: 'border-box' }}
+       />
     </div>
   );
 };

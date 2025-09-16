@@ -1,8 +1,9 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Bold, Italic, List, ListTodo, UserPlus, Link } from 'lucide-react';
+import { Bold, Italic, List, ListTodo, UserPlus, Link, Mail } from 'lucide-react';
 import type { User } from '../types';
 
-type FormatType = 'bold' | 'italic' | 'link' | 'h1' | 'h2' | 'h3' | 'ul' | 'task';
+type FormatType = 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task';
 
 interface ToolbarProps {
   onFormat: (type: FormatType) => void;
@@ -72,6 +73,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onFormat, onInsert, users }) => {
       <ToolbarButton onClick={() => onFormat('bold')} label="Bold"><Bold className="w-5 h-5" /></ToolbarButton>
       <ToolbarButton onClick={() => onFormat('italic')} label="Italic"><Italic className="w-5 h-5" /></ToolbarButton>
       <ToolbarButton onClick={() => onFormat('link')} label="Insert Link"><Link className="w-5 h-5" /></ToolbarButton>
+      <ToolbarButton onClick={() => onFormat('gmail')} label="Insert Gmail Link"><Mail className="w-5 h-5" /></ToolbarButton>
 
       <div className="w-px h-6 bg-slate-700 mx-2"></div>
 
