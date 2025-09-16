@@ -1,5 +1,30 @@
 import { useMemo } from 'react';
-import { User, Task, GroupedTasks, TaskUpdate, Project } from '../types';
+import { User, Task, GroupedTasks, TaskUpdate, Project, Heading } from '../types';
+
+const slugify = (text: string, existingSlugs: Set<string>): string => {
+  let slug = text.toLowerCase().trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  if (!slug) {
+      slug = 'section';
+  }
+
+  if (existingSlugs.has(slug)) {
+    let counter = 2;
+    let newSlug = `${slug}-${counter}`;
+    while (existingSlugs.has(newSlug)) {
+      counter++;
+      newSlug = `${slug}-${counter}`;
+    }
+    slug = newSlug;
+  }
+  
+  existingSlugs.add(slug);
+  return slug;
+};
+
 
 export const useMarkdownParser = (markdown: string, users: User[]): Project[] => {
     return useMemo(() => {
@@ -25,6 +50,8 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
             
             const projectLines = lines.slice(startLine, endLine + 1);
             const currentProjectTasks: Task[] = [];
+            const currentProjectHeadings: Heading[] = [];
+            const existingSlugs = new Set<string>();
             
             const taskRegex = /^- \[( |x)\] (.*)/;
             const assigneeRegex = /\s\(@([a-zA-Z0-9_]+)\)/;
@@ -37,6 +64,21 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
             while (i < projectLines.length) {
                 const line = projectLines[i];
                 const absoluteLineIndex = startLine + i;
+
+                const hMatch = line.match(/^(#+) (.*)/);
+                if (hMatch) {
+                    const level = hMatch[1].length;
+                    const text = hMatch[2].trim();
+                    if (level <= 3) {
+                         currentProjectHeadings.push({
+                            text,
+                            slug: slugify(text, existingSlugs),
+                            level,
+                            line: absoluteLineIndex,
+                        });
+                    }
+                }
+                
                 const taskMatch = line.match(taskRegex);
 
                 if (taskMatch) {
@@ -118,9 +160,10 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                 totalCost,
                 startLine,
                 endLine,
+                headings: currentProjectHeadings,
             });
         });
         
-        return projects.length > 0 ? projects : [{ title: 'Project Overview', groupedTasks: {}, unassignedTasks: [], totalCost: 0, startLine: 0, endLine: lines.length - 1 }];
+        return projects;
     }, [markdown, users]);
 };

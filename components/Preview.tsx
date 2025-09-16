@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { User, TaskUpdate } from '../types';
-import { Pencil, Trash2, MessageSquarePlus, X, User as UserIcon, ChevronsUpDown } from 'lucide-react';
+import { User, TaskUpdate, Heading } from '../types';
+import { Pencil, Trash2, MessageSquarePlus, X, User as UserIcon, ChevronsUpDown, Mail } from 'lucide-react';
 
 const parseInlineMarkdown = (text: string): React.ReactNode[] => {
   const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);
@@ -31,6 +31,68 @@ const UserPlusIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+const GmailLinkModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (subject: string) => void;
+}> = ({ isOpen, onClose, onConfirm }) => {
+  const [subject, setSubject] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSubject('');
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (subject.trim()) {
+      onConfirm(subject);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50" aria-modal="true" role="dialog">
+      <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4 border border-slate-700">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-slate-100">Insert Gmail Search Link</h2>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-700 text-slate-400" aria-label="Close modal">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <label htmlFor="subject-input-preview" className="block text-sm font-medium text-slate-300 mb-2">
+            Email Subject
+          </label>
+          <input
+            ref={inputRef}
+            id="subject-input-preview"
+            type="text"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+            required
+            placeholder="e.g., Modello servizi Master"
+          />
+          <div className="flex justify-end space-x-3 mt-6">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-md bg-slate-600 hover:bg-slate-500 font-semibold">
+              Cancel
+            </button>
+            <button type="submit" className="flex items-center space-x-2 px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 font-semibold">
+              <Mail className="w-4 h-4" />
+              <span>Insert Link</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const AddUpdateForm: React.FC<{ onAdd: (text: string, assigneeAlias: string | null) => void; users: User[] }> = ({ onAdd, users }) => {
     const [text, setText] = useState('');
     const [assigneeAlias, setAssigneeAlias] = useState<string | null>(null);
@@ -38,6 +100,7 @@ const AddUpdateForm: React.FC<{ onAdd: (text: string, assigneeAlias: string | nu
     const [searchTerm, setSearchTerm] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const [isGmailLinkModalOpen, setIsGmailLinkModalOpen] = useState(false);
     
     const assignee = useMemo(() => users.find(u => u.alias === assigneeAlias), [users, assigneeAlias]);
 
@@ -58,6 +121,38 @@ const AddUpdateForm: React.FC<{ onAdd: (text: string, assigneeAlias: string | nu
         }
     };
 
+    const handleGmailLinkInsert = (subject: string) => {
+      const trimmedSubject = subject.trim();
+      const encodedSubject = trimmedSubject
+        .replace(/\(/g, '%28')
+        .replace(/\)/g, '%29')
+        .replace(/ /g, '+');
+      
+      const url = `https://mail.google.com/mail/u/0/#search/subject%3A%22${encodedSubject}%22`;
+      const linkText = `[✉️ ${trimmedSubject}](${url})`;
+
+      const textarea = textareaRef.current;
+      if (textarea) {
+          const { selectionStart, selectionEnd } = textarea;
+          const currentText = text;
+          const newText = 
+              currentText.substring(0, selectionStart) + 
+              linkText + 
+              currentText.substring(selectionEnd);
+          
+          setText(newText);
+          
+          setTimeout(() => {
+              textarea.focus();
+              const newCursorPos = selectionStart + linkText.length;
+              textarea.setSelectionRange(newCursorPos, newCursorPos);
+          }, 0);
+      } else {
+          setText(prev => prev + linkText);
+      }
+      setIsGmailLinkModalOpen(false);
+    };
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsDropdownOpen(false);
@@ -76,51 +171,61 @@ const AddUpdateForm: React.FC<{ onAdd: (text: string, assigneeAlias: string | nu
     }
 
     return (
-        <form onSubmit={handleSubmit} className="flex items-start space-x-2 pt-3">
-            <MessageSquarePlus className="h-5 w-5 text-slate-500 mt-2 flex-shrink-0" />
-            <textarea
-                ref={textareaRef} value={text} onChange={(e) => setText(e.target.value)}
-                placeholder="Add a new update..." rows={1}
-                className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none resize-none placeholder-slate-500"
-            />
-            <div className="relative" ref={dropdownRef}>
-                 <button type="button" onClick={() => setIsDropdownOpen(p => !p)} className="p-2 rounded-md bg-slate-700 hover:bg-slate-600 transition-colors">
-                    {assignee ? <img src={assignee.avatarUrl} alt={assignee.name} className="h-5 w-5 rounded-full" /> : <UserIcon className="h-5 w-5 text-slate-400" />}
+        <>
+            <form onSubmit={handleSubmit} className="flex items-start space-x-2 pt-3">
+                <MessageSquarePlus className="h-5 w-5 text-slate-500 mt-2 flex-shrink-0" />
+                <textarea
+                    ref={textareaRef} value={text} onChange={(e) => setText(e.target.value)}
+                    placeholder="Add a new update..." rows={1}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none resize-none placeholder-slate-500"
+                />
+                <button type="button" onClick={() => setIsGmailLinkModalOpen(true)} className="p-2 rounded-md bg-slate-700 hover:bg-slate-600 transition-colors" title="Insert Gmail Link">
+                    <Mail className="h-5 w-5 text-slate-400" />
                 </button>
-                {isDropdownOpen && (
-                     <div className="absolute right-0 bottom-full mb-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20">
-                        <div className="p-1">
-                            <input
-                                type="text"
-                                placeholder="Search assignee..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full sticky top-0 mb-1 px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-md text-slate-200 focus:ring-1 focus:ring-indigo-500 outline-none"
-                            />
-                            <div className="max-h-48 overflow-y-auto">
-                                {filteredUsers.map(user => (
-                                    <button type="button" key={user.alias} onClick={() => handleSelect(user.alias)} className="w-full text-left flex items-center space-x-2 px-2 py-1.5 rounded-md hover:bg-slate-700">
-                                        <img src={user.avatarUrl} alt={user.name} className="h-5 w-5 rounded-full" />
-                                        <span className="text-sm text-slate-200">{user.name}</span>
-                                    </button>
-                                ))}
-                                {filteredUsers.length === 0 && <p className="px-2 py-1 text-sm text-slate-400">No users found.</p>}
+                <div className="relative" ref={dropdownRef}>
+                    <button type="button" onClick={() => setIsDropdownOpen(p => !p)} className="p-2 rounded-md bg-slate-700 hover:bg-slate-600 transition-colors">
+                        {assignee ? <img src={assignee.avatarUrl} alt={assignee.name} className="h-5 w-5 rounded-full" /> : <UserIcon className="h-5 w-5 text-slate-400" />}
+                    </button>
+                    {isDropdownOpen && (
+                        <div className="absolute right-0 bottom-full mb-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20">
+                            <div className="p-1">
+                                <input
+                                    type="text"
+                                    placeholder="Search assignee..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full sticky top-0 mb-1 px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-md text-slate-200 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                />
+                                <div className="max-h-48 overflow-y-auto">
+                                    {filteredUsers.map(user => (
+                                        <button type="button" key={user.alias} onClick={() => handleSelect(user.alias)} className="w-full text-left flex items-center space-x-2 px-2 py-1.5 rounded-md hover:bg-slate-700">
+                                            <img src={user.avatarUrl} alt={user.name} className="h-5 w-5 rounded-full" />
+                                            <span className="text-sm text-slate-200">{user.name}</span>
+                                        </button>
+                                    ))}
+                                    {filteredUsers.length === 0 && <p className="px-2 py-1 text-sm text-slate-400">No users found.</p>}
+                                </div>
+                                {(assignee || searchTerm) && <div className="border-t border-slate-700 my-1"></div>}
+                                <button type="button" onClick={() => handleSelect(null)} className="w-full text-left text-sm text-slate-400 px-2 py-1.5 rounded-md hover:bg-slate-700">
+                                    No Assignee
+                                </button>
                             </div>
-                            {(assignee || searchTerm) && <div className="border-t border-slate-700 my-1"></div>}
-                            <button type="button" onClick={() => handleSelect(null)} className="w-full text-left text-sm text-slate-400 px-2 py-1.5 rounded-md hover:bg-slate-700">
-                                No Assignee
-                            </button>
                         </div>
-                    </div>
-                )}
-            </div>
-            <button
-                type="submit"
-                className="px-3 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold text-sm disabled:bg-slate-600 disabled:cursor-not-allowed"
-                disabled={!text.trim()} aria-label="Add Update">
-                Add
-            </button>
-        </form>
+                    )}
+                </div>
+                <button
+                    type="submit"
+                    className="px-3 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold text-sm disabled:bg-slate-600 disabled:cursor-not-allowed"
+                    disabled={!text.trim()} aria-label="Add Update">
+                    Add
+                </button>
+            </form>
+            <GmailLinkModal 
+                isOpen={isGmailLinkModalOpen}
+                onClose={() => setIsGmailLinkModalOpen(false)}
+                onConfirm={handleGmailLinkInsert}
+            />
+        </>
     );
 };
 
@@ -346,6 +451,7 @@ const InteractiveTaskItem: React.FC<InteractiveTaskItemProps> = (props) => {
 
 interface PreviewProps {
   markdown: string;
+  headings: Heading[];
   onToggle: (lineIndex: number, isCompleted: boolean) => void;
   onAssign: (lineIndex: number, userAlias: string | null) => void;
   onUpdateCompletionDate: (lineIndex: number, newDate: string) => void;
@@ -353,22 +459,15 @@ interface PreviewProps {
   onAddTaskUpdate: (taskLineIndex: number, updateText: string, assigneeAlias: string | null) => void;
   onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
   onDeleteTaskUpdate: (updateLineIndex: number) => void;
+  onHeadingClick: (slug: string) => void;
   users: User[];
   forwardedRef: React.RefObject<HTMLDivElement>;
 }
 
 const Preview: React.FC<PreviewProps> = (props) => {
-  const { markdown, users, forwardedRef } = props;
+  const { markdown, headings, onHeadingClick, users, forwardedRef } = props;
   const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
-  
-  const renderSimpleMarkdownLine = (line: string, index: number) => {
-    const h1Match = line.match(/^# (.*)/); if (h1Match) return <h1 key={index} className="text-3xl font-bold mt-6 mb-3 pb-2 border-b border-slate-700"><InlineMarkdown text={h1Match[1]} /></h1>;
-    const h2Match = line.match(/^## (.*)/); if (h2Match) return <h2 key={index} className="text-2xl font-semibold mt-5 mb-2"><InlineMarkdown text={h2Match[1]} /></h2>;
-    const h3Match = line.match(/^### (.*)/); if (h3Match) return <h3 key={index} className="text-xl font-semibold mt-4 mb-1"><InlineMarkdown text={h3Match[1]} /></h3>;
-    const ulMatch = line.match(/^[-*] (.*)/); if (ulMatch) return <li key={index} className="ml-6 list-disc text-slate-300"><InlineMarkdown text={ulMatch[1]} /></li>;
-    if (line.trim() === '') return <div key={index} className="h-4"></div>;
-    return <p key={index} className="text-slate-300 my-2 leading-relaxed"><InlineMarkdown text={line} /></p>;
-  };
+  const headingsByLine = useMemo(() => new Map(headings.map(h => [h.line, h])), [headings]);
 
   const renderContent = () => {
     const lines = markdown.split('\n');
@@ -377,8 +476,27 @@ const Preview: React.FC<PreviewProps> = (props) => {
 
     while (i < lines.length) {
       const line = lines[i];
-      const taskMatch = line.match(/^- \[( |x)\] (.*)/);
+      const relativeLineIndex = i;
+
+      const headingInfo = headingsByLine.get(relativeLineIndex);
+      if (headingInfo) {
+          const commonProps = {
+              key: relativeLineIndex,
+              id: headingInfo.slug,
+              onClick: () => onHeadingClick(headingInfo.slug),
+          };
+          const textNode = <InlineMarkdown text={headingInfo.text} />;
+          let className = "cursor-pointer hover:text-indigo-400 transition-colors ";
+          if (headingInfo.level === 1) className += "text-3xl font-bold mt-6 mb-3 pb-2 border-b border-slate-700";
+          else if (headingInfo.level === 2) className += "text-2xl font-semibold mt-5 mb-2";
+          else if (headingInfo.level === 3) className += "text-xl font-semibold mt-4 mb-1";
+          
+          elements.push(React.createElement(`h${headingInfo.level}`, { ...commonProps, className }, textNode));
+          i++;
+          continue;
+      }
       
+      const taskMatch = line.match(/^- \[( |x)\] (.*)/);
       if (taskMatch) {
         let fullTaskText = taskMatch[2];
         let assignee: User | null = null;
@@ -453,7 +571,10 @@ const Preview: React.FC<PreviewProps> = (props) => {
         continue;
       }
       
-      elements.push(renderSimpleMarkdownLine(line, i));
+      const ulMatch = line.match(/^[-*] (.*)/); if (ulMatch) elements.push(<li key={i} className="ml-6 list-disc text-slate-300"><InlineMarkdown text={ulMatch[1]} /></li>);
+      else if (line.trim() === '') elements.push(<div key={i} className="h-4"></div>);
+      else elements.push(<p key={i} className="text-slate-300 my-2 leading-relaxed"><InlineMarkdown text={line} /></p>);
+      
       i++;
     }
     return elements;

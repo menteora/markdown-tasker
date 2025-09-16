@@ -31,6 +31,13 @@ export interface GroupedTasks {
   };
 }
 
+export interface Heading {
+  text: string;
+  slug: string;
+  level: number;
+  line: number;
+}
+
 export interface Project {
   title: string;
   groupedTasks: GroupedTasks;
@@ -38,6 +45,7 @@ export interface Project {
   totalCost: number;
   startLine: number;
   endLine: number;
+  headings: Heading[];
 }
 
 export interface Settings {
