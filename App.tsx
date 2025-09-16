@@ -1,17 +1,16 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import Editor from './components/Editor';
-import Preview from './components/Preview';
 import UserManagement from './components/UserManagement';
 import ProjectOverview from './components/ProjectOverview';
 import ProjectActions from './components/ProjectActions';
-import type { User, Project, GroupedTasks, Task, Settings, Heading } from './types';
+import type { User, Project, GroupedTasks, Task, Settings } from './types';
 import { useMarkdownParser } from './hooks/useMarkdownParser';
 import { INITIAL_USERS } from './constants';
 import saveAs from 'file-saver';
 import { ChevronsUpDown, Settings as SettingsIcon } from 'lucide-react';
 import { useSettings } from './hooks/useSettings';
 import SettingsModal from './components/SettingsModal';
+import EditableDocumentView from './components/EditableDocumentView';
 
 const initialMarkdown = `# Project Titan Launch 🚀
 
@@ -156,11 +155,6 @@ const App: React.FC = () => {
   const [viewScope, setViewScope] = useState<ViewScope>('all');
   const [settings, saveSettings] = useSettings();
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  
-  const editorRef = useRef<HTMLTextAreaElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
-  const sizerRef = useRef<HTMLDivElement>(null);
-  const scrollSource = useRef<'editor' | 'preview' | 'programmatic' | null>(null);
 
   const projects = useMarkdownParser(markdown, users);
   
@@ -178,135 +172,35 @@ const App: React.FC = () => {
       setCurrentProjectIndex(Math.max(0, projects.length - 1));
     }
   }, [projects, currentProjectIndex]);
-  
-  useEffect(() => {
-    const editor = editorRef.current;
-    const preview = previewRef.current;
 
-    if (!editor || !preview || view !== 'editor') return;
-
-    const handleEditorScroll = () => {
-        if (scrollSource.current === 'preview' || scrollSource.current === 'programmatic') {
-            if(scrollSource.current !== 'programmatic') scrollSource.current = null;
-            return;
-        }
-        scrollSource.current = 'editor';
-        const scrollPercentage = editor.scrollTop / (editor.scrollHeight - editor.clientHeight);
-        if (isNaN(scrollPercentage)) return;
-        preview.scrollTop = scrollPercentage * (preview.scrollHeight - preview.clientHeight);
-    };
-
-    const handlePreviewScroll = () => {
-        if (scrollSource.current === 'editor' || scrollSource.current === 'programmatic') {
-             if(scrollSource.current !== 'programmatic') scrollSource.current = null;
-            return;
-        }
-        scrollSource.current = 'preview';
-        const scrollPercentage = preview.scrollTop / (preview.scrollHeight - preview.clientHeight);
-        if (isNaN(scrollPercentage)) return;
-        editor.scrollTop = scrollPercentage * (editor.scrollHeight - editor.clientHeight);
-    };
-
-    editor.addEventListener('scroll', handleEditorScroll);
-    preview.addEventListener('scroll', handlePreviewScroll);
-
-    return () => {
-        editor.removeEventListener('scroll', handleEditorScroll);
-        preview.removeEventListener('scroll', handlePreviewScroll);
-    };
-  }, [view]);
-
-  const { displayMarkdown, markdownOffset, displayHeadings } = useMemo(() => {
+  const displayMarkdown = useMemo(() => {
     if (viewScope === 'single' && currentProjectIndex < projects.length) {
       const project = projects[currentProjectIndex];
       const lines = markdown.split('\n');
-      return {
-        displayMarkdown: lines.slice(project.startLine, project.endLine + 1).join('\n'),
-        markdownOffset: project.startLine,
-        displayHeadings: project.headings.map(h => ({ ...h, line: h.line - project.startLine })),
-      };
+      return lines.slice(project.startLine, project.endLine + 1).join('\n');
     }
-    const allHeadings = projects.flatMap(p => p.headings);
-    return {
-      displayMarkdown: markdown,
-      markdownOffset: 0,
-      displayHeadings: allHeadings,
-    };
+    return markdown;
   }, [markdown, viewScope, currentProjectIndex, projects]);
+
+  const handleSectionUpdate = useCallback((startLine: number, endLine: number, newContent: string) => {
+    const absoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex]) ? projects[currentProjectIndex].startLine + startLine : startLine;
+    const absoluteEndLine = (viewScope === 'single' && projects[currentProjectIndex]) ? projects[currentProjectIndex].startLine + endLine : endLine;
+
+    setMarkdown(prev => {
+        const lines = prev.split('\n');
+        const before = lines.slice(0, absoluteStartLine);
+        const after = lines.slice(absoluteEndLine + 1);
+        const newLines = newContent.split('\n');
+        return [...before, ...newLines, ...after].join('\n');
+    });
+  }, [viewScope, currentProjectIndex, projects]);
   
-  const handleEditorHeadingClick = useCallback((relativeLine: number) => {
-      scrollSource.current = 'programmatic';
-      const absoluteLine = relativeLine + markdownOffset;
-      const allHeadings = projects.flatMap(p => p.headings);
-      const heading = allHeadings.find(h => h.line === absoluteLine);
-      
-      if (heading && previewRef.current) {
-          const element = previewRef.current.querySelector(`#${heading.slug}`);
-          if (element) {
-              element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-      }
-      setTimeout(() => { scrollSource.current = null; }, 500);
-  }, [markdownOffset, projects]);
-
-  const handlePreviewHeadingClick = useCallback((slug: string) => {
-      scrollSource.current = 'programmatic';
-      const allHeadings = projects.flatMap(p => p.headings);
-      const heading = allHeadings.find(h => h.slug === slug);
-
-      if (heading && editorRef.current && sizerRef.current) {
-          const editor = editorRef.current;
-          const sizer = sizerRef.current;
-          const lines = editor.value.split('\n');
-          const lineInEditor = heading.line - markdownOffset;
-          
-          // Match sizer width to editor's inner content width to ensure correct line wrapping
-          const editorStyle = window.getComputedStyle(editor);
-          sizer.style.width = editorStyle.width;
-
-          const textToMeasure = lines.slice(0, lineInEditor).join('\n');
-          // Use textContent to avoid HTML injection and properly render newlines
-          sizer.textContent = textToMeasure;
-
-          // Use sizer's height to get precise scroll position
-          const targetScrollTop = sizer.scrollHeight;
-
-          const startScrollTop = editor.scrollTop;
-          const distance = targetScrollTop - startScrollTop;
-          
-          if (Math.abs(distance) < 1) {
-              setTimeout(() => { scrollSource.current = null; }, 300);
-              return;
-          }
-
-          const duration = 300; // ms for smooth animation
-          let startTime: number | null = null;
-          
-          const easeInOutQuad = (t: number, b: number, c: number, d: number): number => {
-              t /= d / 2;
-              if (t < 1) return c / 2 * t * t + b;
-              t--;
-              return -c / 2 * (t * (t - 2) - 1) + b;
-          };
-
-          const animateScroll = (timestamp: number) => {
-              if (!editorRef.current) return;
-              if (!startTime) startTime = timestamp;
-              const progress = timestamp - startTime;
-              
-              editorRef.current.scrollTop = easeInOutQuad(progress, startScrollTop, distance, duration);
-              
-              if (progress < duration) {
-                  requestAnimationFrame(animateScroll);
-              } else {
-                  editorRef.current.scrollTop = targetScrollTop; // Ensure it lands on the exact spot
-              }
-          };
-          
-          requestAnimationFrame(animateScroll);
-      }
-      setTimeout(() => { scrollSource.current = null; }, 500);
-  }, [projects, markdownOffset]);
+  const getAbsoluteLineIndex = useCallback((relativeLineIndex: number): number => {
+    if (viewScope === 'single' && projects[currentProjectIndex]) {
+        return projects[currentProjectIndex].startLine + relativeLineIndex;
+    }
+    return relativeLineIndex;
+  }, [viewScope, currentProjectIndex, projects]);
 
 
   const currentProject = projects[currentProjectIndex] || { title: 'Project', groupedTasks: {}, unassignedTasks: [], totalCost: 0, startLine: 0, endLine: 0, headings: [] };
@@ -333,28 +227,12 @@ const App: React.FC = () => {
 
   const dataForOverview = viewScope === 'all' ? aggregatedData : currentProject;
 
-  const handleEditorChange = (newContent: string) => {
-    if (viewScope === 'single' && currentProjectIndex < projects.length) {
-      const project = projects[currentProjectIndex];
-      const originalLines = markdown.split('\n');
-      
-      const beforeLines = originalLines.slice(0, project.startLine);
-      const afterLines = originalLines.slice(project.endLine + 1);
-      
-      const newLines = newContent.split('\n');
-      
-      setMarkdown([...beforeLines, ...newLines, ...afterLines].join('\n'));
-    } else {
-      setMarkdown(newContent);
-    }
-  };
-
-  const handleAssign = useCallback((relativeLineIndex: number, userAlias: string | null) => {
-    const lineIndex = relativeLineIndex + markdownOffset;
+  const handleAssign = useCallback((lineIndex: number, userAlias: string | null) => {
+    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
     setMarkdown(prevMarkdown => {
       const lines = prevMarkdown.split('\n');
-      if (lineIndex >= lines.length) return prevMarkdown;
-      const line = lines[lineIndex];
+      if (absoluteLineIndex >= lines.length) return prevMarkdown;
+      const line = lines[absoluteLineIndex];
       
       const assigneeRegex = /\s\(@[a-zA-Z0-9_]+\)/;
       const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
@@ -379,17 +257,17 @@ const App: React.FC = () => {
       if (costMatch) newLine = `${newLine}${costMatch[0]}`;
       if (dateMatch) newLine = `${newLine}${dateMatch[0]}`;
       
-      lines[lineIndex] = newLine;
+      lines[absoluteLineIndex] = newLine;
       return lines.join('\n');
     });
-  }, [markdownOffset]);
+  }, [getAbsoluteLineIndex]);
 
-  const handleToggle = useCallback((relativeLineIndex: number, isCompleted: boolean) => {
-    const lineIndex = relativeLineIndex + markdownOffset;
+  const handleToggle = useCallback((lineIndex: number, isCompleted: boolean) => {
+    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
     setMarkdown(prevMarkdown => {
         const lines = prevMarkdown.split('\n');
-        if (lineIndex >= lines.length) return prevMarkdown;
-        const line = lines[lineIndex];
+        if (absoluteLineIndex >= lines.length) return prevMarkdown;
+        const line = lines[absoluteLineIndex];
 
         const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
         let newLine = line.replace(dateRegex, '');
@@ -402,30 +280,30 @@ const App: React.FC = () => {
         const taskRegex = /^- \[( |x)\]/;
         newLine = newLine.replace(taskRegex, `- [${isCompleted ? 'x' : ' '}]`);
         
-        lines[lineIndex] = newLine;
+        lines[absoluteLineIndex] = newLine;
         return lines.join('\n');
     });
-  }, [markdownOffset]);
+  }, [getAbsoluteLineIndex]);
 
-  const handleUpdateCompletionDate = useCallback((relativeLineIndex: number, newDate: string) => {
-    const lineIndex = relativeLineIndex + markdownOffset;
+  const handleUpdateCompletionDate = useCallback((lineIndex: number, newDate: string) => {
+    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
     setMarkdown(prevMarkdown => {
         const lines = prevMarkdown.split('\n');
-        if (lineIndex >= lines.length) return prevMarkdown;
-        const line = lines[lineIndex];
+        if (absoluteLineIndex >= lines.length) return prevMarkdown;
+        const line = lines[absoluteLineIndex];
         const dateRegex = /~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
         
-        lines[lineIndex] = line.replace(dateRegex, `~${newDate}`);
+        lines[absoluteLineIndex] = line.replace(dateRegex, `~${newDate}`);
         return lines.join('\n');
     });
-  }, [markdownOffset]);
+  }, [getAbsoluteLineIndex]);
 
-  const handleUpdateDueDate = useCallback((relativeLineIndex: number, newDate: string | null) => {
-    const lineIndex = relativeLineIndex + markdownOffset;
+  const handleUpdateDueDate = useCallback((lineIndex: number, newDate: string | null) => {
+    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
     setMarkdown(prevMarkdown => {
         const lines = prevMarkdown.split('\n');
-        if (lineIndex >= lines.length) return prevMarkdown;
-        let line = lines[lineIndex];
+        if (absoluteLineIndex >= lines.length) return prevMarkdown;
+        let line = lines[absoluteLineIndex];
 
         const dueDateRegex = /\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/;
         const assigneeRegex = /\s\(@[a-zA-Z0-9_]+\)/;
@@ -457,39 +335,39 @@ const App: React.FC = () => {
             newLine += completionDateMatch[0];
         }
 
-        lines[lineIndex] = newLine;
+        lines[absoluteLineIndex] = newLine;
         return lines.join('\n');
     });
-  }, [markdownOffset]);
+  }, [getAbsoluteLineIndex]);
 
-  const handleUpdateCreationDate = useCallback((relativeLineIndex: number, newDate: string) => {
-    const lineIndex = relativeLineIndex + markdownOffset;
+  const handleUpdateCreationDate = useCallback((lineIndex: number, newDate: string) => {
+    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
     setMarkdown(prevMarkdown => {
         const lines = prevMarkdown.split('\n');
-        if (lineIndex >= lines.length) return prevMarkdown;
-        const line = lines[lineIndex];
+        if (absoluteLineIndex >= lines.length) return prevMarkdown;
+        const line = lines[absoluteLineIndex];
         const dateRegex = /\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
         
         if (dateRegex.test(line)) {
-            lines[lineIndex] = line.replace(dateRegex, `+${newDate}`);
+            lines[absoluteLineIndex] = line.replace(dateRegex, `+${newDate}`);
         } else {
             // Add if it doesn't exist
              const taskPrefixRegex = /^- \[( |x)\] /;
-            lines[lineIndex] = line.replace(taskPrefixRegex, `$&+${newDate} `);
+            lines[absoluteLineIndex] = line.replace(taskPrefixRegex, `$&+${newDate} `);
         }
         return lines.join('\n');
     });
-  }, [markdownOffset]);
+  }, [getAbsoluteLineIndex]);
 
-  const handleAddTaskUpdate = useCallback((relativeTaskLineIndex: number, updateText: string, assigneeAlias: string | null) => {
-    const taskLineIndex = relativeTaskLineIndex + markdownOffset;
+  const handleAddTaskUpdate = useCallback((taskLineIndex: number, updateText: string, assigneeAlias: string | null) => {
+    const absoluteTaskLineIndex = getAbsoluteLineIndex(taskLineIndex);
     setMarkdown(prevMarkdown => {
         const lines = prevMarkdown.split('\n');
         const today = new Date().toISOString().split('T')[0];
         const assigneeString = assigneeAlias ? ` (@${assigneeAlias})` : '';
         const newUpdateLine = `  - ${today}: ${updateText}${assigneeString}`;
 
-        let insertAt = taskLineIndex + 1;
+        let insertAt = absoluteTaskLineIndex + 1;
         const updateRegex = /^  - \d{4}-\d{2}-\d{2}: .*/;
         while (insertAt < lines.length && (updateRegex.test(lines[insertAt]) || lines[insertAt].trim() === '')) {
             if (updateRegex.test(lines[insertAt])) {
@@ -502,7 +380,7 @@ const App: React.FC = () => {
         lines.splice(insertAt, 0, newUpdateLine);
         return lines.join('\n');
     });
-  }, [markdownOffset]);
+  }, [getAbsoluteLineIndex]);
   
   const handleAddBulkTaskUpdates = useCallback((taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => {
     setMarkdown(prevMarkdown => {
@@ -529,28 +407,28 @@ const App: React.FC = () => {
     });
   }, []);
 
-  const handleUpdateTaskUpdate = useCallback((relativeUpdateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => {
-      const updateLineIndex = relativeUpdateLineIndex + markdownOffset;
+  const handleUpdateTaskUpdate = useCallback((updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => {
+      const absoluteUpdateLineIndex = getAbsoluteLineIndex(updateLineIndex);
       setMarkdown(prevMarkdown => {
           const lines = prevMarkdown.split('\n');
-          if (updateLineIndex < lines.length) {
+          if (absoluteUpdateLineIndex < lines.length) {
               const assigneeString = newAlias ? ` (@${newAlias})` : '';
-              lines[updateLineIndex] = `  - ${newDate}: ${newText}${assigneeString}`;
+              lines[absoluteUpdateLineIndex] = `  - ${newDate}: ${newText}${assigneeString}`;
           }
           return lines.join('\n');
       });
-  }, [markdownOffset]);
+  }, [getAbsoluteLineIndex]);
 
-  const handleDeleteTaskUpdate = useCallback((relativeUpdateLineIndex: number) => {
-      const updateLineIndex = relativeUpdateLineIndex + markdownOffset;
+  const handleDeleteTaskUpdate = useCallback((updateLineIndex: number) => {
+      const absoluteUpdateLineIndex = getAbsoluteLineIndex(updateLineIndex);
       setMarkdown(prevMarkdown => {
           const lines = prevMarkdown.split('\n');
-          if (updateLineIndex < lines.length) {
-              lines.splice(updateLineIndex, 1);
+          if (absoluteUpdateLineIndex < lines.length) {
+              lines.splice(absoluteUpdateLineIndex, 1);
           }
           return lines.join('\n');
       });
-  }, [markdownOffset]);
+  }, [getAbsoluteLineIndex]);
 
   const handleUpdateUser = useCallback((oldAlias: string, updatedUser: User) => {
     setUsers(prevUsers => prevUsers.map(u => u.alias === oldAlias ? updatedUser : u));
@@ -617,8 +495,7 @@ const App: React.FC = () => {
   const getHeaderDescription = () => {
     switch(view) {
       case 'editor':
-        if(viewScope === 'single') return `Editing project: "${currentProject.title}".`;
-        return 'Edit markdown on the left, assign tasks on the right.';
+        return 'Hover over a section to edit its content individually.';
       case 'users':
         return 'Manage your team. Changes are saved to the project state.';
       case 'overview':
@@ -631,17 +508,10 @@ const App: React.FC = () => {
     switch (view) {
       case 'editor':
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
-            <Editor 
-              value={displayMarkdown} 
-              onChange={handleEditorChange} 
-              users={users}
-              forwardedRef={editorRef}
-              onHeadingClick={handleEditorHeadingClick}
-            />
-            <Preview 
+            <EditableDocumentView
               markdown={displayMarkdown}
-              headings={displayHeadings}
+              users={users}
+              onSectionUpdate={handleSectionUpdate}
               onAssign={handleAssign}
               onToggle={handleToggle}
               onUpdateCompletionDate={handleUpdateCompletionDate}
@@ -650,11 +520,7 @@ const App: React.FC = () => {
               onAddTaskUpdate={handleAddTaskUpdate}
               onUpdateTaskUpdate={handleUpdateTaskUpdate}
               onDeleteTaskUpdate={handleDeleteTaskUpdate}
-              onHeadingClick={handlePreviewHeadingClick}
-              users={users}
-              forwardedRef={previewRef}
             />
-          </div>
         );
       case 'users':
         return (
@@ -758,11 +624,6 @@ const App: React.FC = () => {
         onSave={saveSettings}
         users={users}
       />
-      <div
-         ref={sizerRef}
-         className="absolute -top-[9999px] -left-[9999px] p-4 font-mono text-slate-300 text-sm leading-relaxed border border-slate-700"
-         style={{ whiteSpace: 'pre-wrap', visibility: 'hidden', boxSizing: 'border-box' }}
-       />
     </div>
   );
 };
