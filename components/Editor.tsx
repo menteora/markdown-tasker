@@ -7,6 +7,7 @@ interface EditorProps {
   value: string;
   onChange: (value: string) => void;
   users: User[];
+  forwardedRef: React.RefObject<HTMLTextAreaElement>;
 }
 
 const LinkModal: React.FC<{
@@ -74,24 +75,23 @@ const LinkModal: React.FC<{
 };
 
 
-const Editor: React.FC<EditorProps> = ({ value, onChange, users }) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+const Editor: React.FC<EditorProps> = ({ value, onChange, users, forwardedRef }) => {
   const selectionRef = useRef<{ start: number; end: number } | null>(null);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const linkSelectionRef = useRef<{ start: number, end: number } | null>(null);
 
   useEffect(() => {
-    const textarea = textareaRef.current;
+    const textarea = forwardedRef.current;
     if (textarea && selectionRef.current) {
       textarea.focus();
       textarea.setSelectionRange(selectionRef.current.start, selectionRef.current.end);
       selectionRef.current = null;
     }
-  }, [value]);
+  }, [value, forwardedRef]);
 
 
   const handleInsert = useCallback((text: string) => {
-    const textarea = textareaRef.current;
+    const textarea = forwardedRef.current;
     if (!textarea) return;
 
     const { selectionStart, selectionEnd } = textarea;
@@ -104,10 +104,10 @@ const Editor: React.FC<EditorProps> = ({ value, onChange, users }) => {
     selectionRef.current = { start: newCursorPos, end: newCursorPos };
     onChange(newValue);
     
-  }, [value, onChange]);
+  }, [value, onChange, forwardedRef]);
 
    const handleLinkInsert = (url: string) => {
-    const textarea = textareaRef.current;
+    const textarea = forwardedRef.current;
     if (!textarea || !linkSelectionRef.current) return;
 
     const { start: selectionStart, end: selectionEnd } = linkSelectionRef.current;
@@ -138,7 +138,7 @@ const Editor: React.FC<EditorProps> = ({ value, onChange, users }) => {
   };
 
   const applyFormat = useCallback((type: 'bold' | 'italic' | 'link' | 'h1' | 'h2' | 'h3' | 'ul' | 'task') => {
-    const textarea = textareaRef.current;
+    const textarea = forwardedRef.current;
     if (!textarea) return;
 
     const { selectionStart, selectionEnd } = textarea;
@@ -207,20 +207,24 @@ const Editor: React.FC<EditorProps> = ({ value, onChange, users }) => {
     selectionRef.current = { start: newSelectionStart, end: newSelectionEnd };
     onChange(newValue);
 
-  }, [value, onChange]);
+  }, [value, onChange, forwardedRef]);
 
 
   return (
-    <div className="h-full p-4 flex flex-col gap-4">
-      <Toolbar onFormat={applyFormat} onInsert={handleInsert} users={users} />
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full h-full flex-grow p-4 bg-slate-800 border border-slate-700 rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono text-slate-300 text-sm leading-relaxed"
-        placeholder="Type your markdown here..."
-        aria-label="Markdown Editor"
-      />
+    <div className="h-full p-4 flex flex-col">
+      <div className="flex-shrink-0 mb-4">
+        <Toolbar onFormat={applyFormat} onInsert={handleInsert} users={users} />
+      </div>
+      <div className="flex-grow relative min-h-0">
+        <textarea
+            ref={forwardedRef}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 w-full h-full p-4 bg-slate-800 border border-slate-700 rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono text-slate-300 text-sm leading-relaxed"
+            placeholder="Type your markdown here..."
+            aria-label="Markdown Editor"
+        />
+      </div>
        <LinkModal
             isOpen={isLinkModalOpen}
             onClose={() => setIsLinkModalOpen(false)}

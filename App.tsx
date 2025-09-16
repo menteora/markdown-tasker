@@ -158,6 +158,10 @@ const App: React.FC = () => {
   const [settings, saveSettings] = useSettings();
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const scrollSource = useRef<'editor' | 'preview' | null>(null);
+
   const projects = useMarkdownParser(markdown, users);
   
   useEffect(() => {
@@ -174,6 +178,43 @@ const App: React.FC = () => {
       setCurrentProjectIndex(Math.max(0, projects.length - 1));
     }
   }, [projects, currentProjectIndex]);
+  
+  useEffect(() => {
+    const editor = editorRef.current;
+    const preview = previewRef.current;
+
+    if (!editor || !preview) return;
+
+    const handleEditorScroll = () => {
+        if (scrollSource.current === 'preview') {
+            scrollSource.current = null;
+            return;
+        }
+        scrollSource.current = 'editor';
+        const scrollPercentage = editor.scrollTop / (editor.scrollHeight - editor.clientHeight);
+        if (isNaN(scrollPercentage)) return;
+        preview.scrollTop = scrollPercentage * (preview.scrollHeight - preview.clientHeight);
+    };
+
+    const handlePreviewScroll = () => {
+        if (scrollSource.current === 'editor') {
+            scrollSource.current = null;
+            return;
+        }
+        scrollSource.current = 'preview';
+        const scrollPercentage = preview.scrollTop / (preview.scrollHeight - preview.clientHeight);
+        if (isNaN(scrollPercentage)) return;
+        editor.scrollTop = scrollPercentage * (editor.scrollHeight - editor.clientHeight);
+    };
+
+    editor.addEventListener('scroll', handleEditorScroll);
+    preview.addEventListener('scroll', handlePreviewScroll);
+
+    return () => {
+        editor.removeEventListener('scroll', handleEditorScroll);
+        preview.removeEventListener('scroll', handlePreviewScroll);
+    };
+  }, [view]);
 
   const { displayMarkdown, markdownOffset } = useMemo(() => {
     if (viewScope === 'single' && currentProjectIndex < projects.length) {
@@ -475,6 +516,7 @@ const App: React.FC = () => {
               value={displayMarkdown} 
               onChange={handleEditorChange} 
               users={users}
+              forwardedRef={editorRef}
             />
             <Preview 
               markdown={displayMarkdown}
@@ -486,6 +528,7 @@ const App: React.FC = () => {
               onUpdateTaskUpdate={handleUpdateTaskUpdate}
               onDeleteTaskUpdate={handleDeleteTaskUpdate}
               users={users}
+              forwardedRef={previewRef}
             />
           </div>
         );
@@ -515,8 +558,8 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col">
-      <header className="py-4 px-8 border-b border-slate-700 bg-slate-900/70 backdrop-blur-sm sticky top-0 z-10 flex flex-wrap justify-between items-center gap-4">
+    <div className="h-screen bg-slate-900 text-white font-sans flex flex-col overflow-hidden">
+      <header className="py-4 px-8 border-b border-slate-700 bg-slate-900/70 backdrop-blur-sm z-10 flex flex-wrap justify-between items-center gap-4 flex-shrink-0">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <div>
               <h1 className="text-2xl font-bold text-slate-100">Interactive Markdown Tasker</h1>
@@ -578,10 +621,10 @@ const App: React.FC = () => {
           />
         </div>
       </header>
-      <main className="flex-grow overflow-auto">
+      <main className="flex-grow overflow-hidden">
         {renderView()}
       </main>
-      <footer className="text-center py-4 border-t border-slate-700 text-slate-500 text-sm">
+      <footer className="text-center py-4 border-t border-slate-700 text-slate-500 text-sm flex-shrink-0">
         Interactive Markdown Tasker
       </footer>
       <SettingsModal 

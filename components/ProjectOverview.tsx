@@ -115,7 +115,7 @@ const UserTaskCard: React.FC<{
           return;
       }
 
-      const subject = `Task Update for project(s): ${projectTitle}`;
+      const subject = settings.emailSubject.replace('{projectTitle}', projectTitle);
       
       const tasksByProject = incompleteTasks.reduce((acc, task) => {
           if (!acc[task.projectTitle]) acc[task.projectTitle] = [];
@@ -136,8 +136,9 @@ const UserTaskCard: React.FC<{
           .join('');
       
       const preamble = settings.emailPreamble.replace('{userName}', user.name.split(' ')[0] || user.name);
+      const signature = settings.emailSignature.replace('{senderName}', sender?.name || 'The Team');
 
-      const body = `${preamble}\n\n${taskListString}\n\n${settings.emailPostamble}`;
+      const body = `${preamble}\n\n${taskListString}\n\n${settings.emailPostamble}\n${signature}`;
 
       const mailtoLink = `mailto:${user.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.open(mailtoLink, '_blank');
