@@ -1,3 +1,4 @@
+
 export interface User {
   name: string;
   alias: string;
@@ -19,6 +20,7 @@ export interface Task {
   assigneeAlias: string | null;
   creationDate?: string | null;
   completionDate: string | null;
+  dueDate?: string | null;
   updates: TaskUpdate[];
   projectTitle: string;
   cost?: number;

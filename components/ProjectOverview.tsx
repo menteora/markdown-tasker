@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo } from 'react';
 import type { User, Task, GroupedTasks, Settings } from '../types';
-import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2 } from 'lucide-react';
+import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2, CalendarDays } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
 
 const formatMarkdownForEmail = (text: string): string => {
@@ -45,36 +44,65 @@ interface ProjectOverviewProps {
   onAddBulkTaskUpdates: (taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => void;
 }
 
-const TaskItem: React.FC<{ task: Task; viewScope: ViewScope }> = ({ task, viewScope }) => (
-  <div className="flex items-start space-x-3">
-    {task.completed ? (
-      <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
-    ) : (
-      <Circle className="h-5 w-5 text-slate-500 flex-shrink-0 mt-0.5" />
-    )}
-    <div className="flex-grow min-w-0">
-      <span className={`text-sm ${task.completed ? 'line-through text-slate-500' : 'text-slate-300'}`}>
-        <InlineMarkdown text={task.text} />
-      </span>
-       {task.cost !== undefined && (
-          <span className="ml-2 text-xs font-semibold bg-slate-700 text-green-400 px-2 py-0.5 rounded-full align-middle">
-            ${task.cost.toFixed(2)}
+const TaskItem: React.FC<{ task: Task; viewScope: ViewScope }> = ({ task, viewScope }) => {
+    const getDueDateInfo = (dateString: string | null, isCompleted: boolean): { color: string, label: string } | null => {
+        if (!dateString || isCompleted) return null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const due = new Date(`${dateString}T00:00:00`);
+        
+        const diffTime = due.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        let color = 'bg-slate-700 text-slate-300';
+        if (diffDays < 0) {
+            color = 'bg-red-500/20 text-red-400';
+        } else if (diffDays === 0) {
+            color = 'bg-yellow-500/20 text-yellow-400';
+        }
+        
+        return { color, label: dateString };
+    };
+  
+    const dueDateInfo = getDueDateInfo(task.dueDate, task.completed);
+
+    return (
+      <div className="flex items-start space-x-3">
+        {task.completed ? (
+          <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+        ) : (
+          <Circle className="h-5 w-5 text-slate-500 flex-shrink-0 mt-0.5" />
+        )}
+        <div className="flex-grow min-w-0">
+          <span className={`text-sm ${task.completed ? 'line-through text-slate-500' : 'text-slate-300'}`}>
+            <InlineMarkdown text={task.text} />
           </span>
-       )}
-      {viewScope === 'all' && <span className="block text-xs text-indigo-400 font-medium">{task.projectTitle}</span>}
-      {task.creationDate && (
-        <span className="block text-xs text-slate-400">
-          Created: {task.creationDate}
-        </span>
-      )}
-      {task.completed && task.completionDate && (
-        <span className="block text-xs text-slate-400">
-          Completed: {task.completionDate}
-        </span>
-      )}
-    </div>
-  </div>
-);
+           {task.cost !== undefined && (
+              <span className="ml-2 text-xs font-semibold bg-slate-700 text-green-400 px-2 py-0.5 rounded-full align-middle">
+                ${task.cost.toFixed(2)}
+              </span>
+           )}
+           {dueDateInfo && (
+             <span className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full align-middle inline-flex items-center ${dueDateInfo.color}`}>
+                <CalendarDays className="h-3 w-3 mr-1" />
+                {dueDateInfo.label}
+             </span>
+           )}
+          {viewScope === 'all' && <span className="block text-xs text-indigo-400 font-medium mt-1">{task.projectTitle}</span>}
+          {task.creationDate && (
+            <span className="block text-xs text-slate-400">
+              Created: {task.creationDate}
+            </span>
+          )}
+          {task.completed && task.completionDate && (
+            <span className="block text-xs text-slate-400">
+              Completed: {task.completionDate}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+};
 
 const ProgressBar: React.FC<{ value: number }> = ({ value }) => (
   <div>

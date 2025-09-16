@@ -111,7 +111,7 @@ const GmailLinkModal: React.FC<{
         </div>
         <form onSubmit={handleSubmit}>
           <label htmlFor="subject-input" className="block text-sm font-medium text-slate-300 mb-2">
-            Email Subject
+            Enter the Gmail email subject here
           </label>
           <input
             ref={inputRef}
