@@ -403,6 +403,45 @@ const App: React.FC = () => {
     });
   }, [getAbsoluteLineIndex]);
 
+  const handleUpdateTaskText = useCallback((lineIndex: number, newText: string) => {
+    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
+    setMarkdown(prevMarkdown => {
+        const lines = prevMarkdown.split('\n');
+        if (absoluteLineIndex >= lines.length) return prevMarkdown;
+
+        const originalLine = lines[absoluteLineIndex];
+        
+        const taskRegex = /^- \[( |x)\] (.*)/;
+        const taskMatch = originalLine.match(taskRegex);
+        if (!taskMatch) return prevMarkdown;
+
+        const prefix = `- [${taskMatch[1]}] `;
+        const content = taskMatch[2];
+
+        const assigneeRegex = /\s\(@[a-zA-Z0-9_]+\)/;
+        const completionDateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
+        const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)$/;
+        const creationDateRegex = /\s\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+        const dueDateRegex = /\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+
+        const completionDateMatch = content.match(completionDateRegex);
+        const costMatch = content.match(costRegex);
+        const assigneeMatch = content.match(assigneeRegex);
+        const creationDateMatch = content.match(creationDateRegex);
+        const dueDateMatch = content.match(dueDateRegex);
+
+        let metadata = '';
+        if (creationDateMatch) metadata += ` ${creationDateMatch[0].trim()}`;
+        if (dueDateMatch) metadata += ` ${dueDateMatch[0].trim()}`;
+        if (assigneeMatch) metadata += ` ${assigneeMatch[0].trim()}`;
+        if (costMatch) metadata += ` ${costMatch[0].trim()}`;
+        if (completionDateMatch) metadata += ` ${completionDateMatch[0].trim()}`;
+        
+        lines[absoluteLineIndex] = `${prefix}${newText}${metadata}`;
+        return lines.join('\n');
+    });
+  }, [getAbsoluteLineIndex]);
+
   const handleAddTaskUpdate = useCallback((taskLineIndex: number, updateText: string, assigneeAlias: string | null) => {
     const absoluteTaskLineIndex = getAbsoluteLineIndex(taskLineIndex);
     setMarkdown(prevMarkdown => {
@@ -576,6 +615,7 @@ const App: React.FC = () => {
               onUpdateCompletionDate={handleUpdateCompletionDate}
               onUpdateCreationDate={handleUpdateCreationDate}
               onUpdateDueDate={handleUpdateDueDate}
+              onUpdateTaskText={handleUpdateTaskText}
               onAddTaskUpdate={handleAddTaskUpdate}
               onUpdateTaskUpdate={handleUpdateTaskUpdate}
               onDeleteTaskUpdate={handleDeleteTaskUpdate}
