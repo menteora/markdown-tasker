@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS: Settings = {
   emailPostamble: 'Please provide an update when you can.\n\nBest regards,',
   emailSignature: '{senderName}',
   reminderMessage: 'Reminder sent.',
+  ccAlias: null,
 };
 
 export const useSettings = (): [Settings, (newSettings: Partial<Settings>) => void] => {

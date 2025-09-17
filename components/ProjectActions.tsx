@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { BookUp, Upload, Download, FileText, CalendarDays } from 'lucide-react';
 import * as docx from 'docx';
 import saveAs from 'file-saver';
-import type { Task, User, Project } from '../types';
+import type { Task, User, Project, Settings } from '../types';
 import DailyReportModal from './DailyReportModal';
 
 type ViewScope = 'single' | 'all';
@@ -318,6 +318,7 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
         saveAs(blob, `${docTitle}.docx`);
         setIsOpen(false);
     }, [markdown, projects, currentProject, viewScope, userByAlias]);
+    
 
     const handleImportClick = () => {
         fileInputRef.current?.click();
@@ -359,7 +360,7 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
                         <button onClick={handleDocxExport} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-200" role="menuitem">
                            <FileText className="w-4 h-4" /> <span>Export as DOCX</span>
                         </button>
-                        
+
                         <div className="border-t border-slate-700 my-2"></div>
                         <div className="px-3 py-2 text-xs font-semibold text-slate-400">Reports</div>
                         <button onClick={() => { setIsDailyReportModalOpen(true); setIsOpen(false); }} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-200" role="menuitem">

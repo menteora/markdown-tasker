@@ -133,6 +133,7 @@ const UserTaskCard: React.FC<{
   const totalCost = tasks.reduce((sum, task) => sum + (task.cost ?? 0), 0);
 
   const sender = useMemo(() => users.find(u => u.alias === settings.senderAlias), [users, settings.senderAlias]);
+  const ccUser = useMemo(() => users.find(u => u.alias === settings.ccAlias), [users, settings.ccAlias]);
 
   const generateEmail = () => {
       if (incompleteTasks.length === 0) {
@@ -168,8 +169,10 @@ const UserTaskCard: React.FC<{
       const signature = settings.emailSignature.replace('{senderName}', sender?.name || 'The Team');
 
       const body = `${preamble}\n\n${taskListString}\n\n${settings.emailPostamble}\n${signature}`;
+      
+      const cc = ccUser?.email ? `&cc=${encodeURIComponent(ccUser.email)}` : '';
+      const mailtoLink = `mailto:${user.email}?subject=${encodeURIComponent(subject)}${cc}&body=${encodeURIComponent(body)}`;
 
-      const mailtoLink = `mailto:${user.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.open(mailtoLink, '_blank');
   };
   
