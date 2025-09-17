@@ -204,13 +204,38 @@ const App: React.FC = () => {
         return [...before, ...newLines, ...after].join('\n');
     });
   }, [viewScope, currentProjectIndex, projects]);
+
+  const handleUpdateTaskBlock = useCallback((absoluteStartLine: number, originalLineCount: number, newContent: string) => {
+    setMarkdown(prev => {
+        const lines = prev.split('\n');
+        const before = lines.slice(0, absoluteStartLine);
+        const after = lines.slice(absoluteStartLine + originalLineCount);
+        const newLines = newContent.split('\n');
+        return [...before, ...newLines, ...after].join('\n');
+    });
+  }, []);
   
-  const getAbsoluteLineIndex = useCallback((relativeLineIndex: number): number => {
-    if (viewScope === 'single' && projects[currentProjectIndex]) {
-        return projects[currentProjectIndex].startLine + relativeLineIndex;
-    }
-    return relativeLineIndex;
-  }, [viewScope, currentProjectIndex, projects]);
+  const handleToggle = useCallback((absoluteLineIndex: number, isCompleted: boolean) => {
+    setMarkdown(prevMarkdown => {
+        const lines = prevMarkdown.split('\n');
+        if (absoluteLineIndex >= lines.length) return prevMarkdown;
+        const line = lines[absoluteLineIndex];
+
+        const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
+        let newLine = line.replace(dateRegex, '');
+
+        if (isCompleted) {
+            const today = new Date().toISOString().split('T')[0];
+            newLine = `${newLine.trim()} ~${today}`;
+        }
+        
+        const taskRegex = /^- \[( |x)\]/;
+        newLine = newLine.replace(taskRegex, `- [${isCompleted ? 'x' : ' '}]`);
+        
+        lines[absoluteLineIndex] = newLine;
+        return lines.join('\n');
+    });
+  }, []);
 
   const handleToggleFullEdit = useCallback(() => {
     setFullEditContent(displayMarkdown);
@@ -271,200 +296,6 @@ const App: React.FC = () => {
       .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
   }, [projects, currentProject, viewScope]);
 
-  const handleAssign = useCallback((lineIndex: number, userAlias: string | null) => {
-    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
-    setMarkdown(prevMarkdown => {
-      const lines = prevMarkdown.split('\n');
-      if (absoluteLineIndex >= lines.length) return prevMarkdown;
-      const line = lines[absoluteLineIndex];
-      
-      const assigneeRegex = /\s\(@[a-zA-Z0-9_]+\)/;
-      const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
-      const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)$/;
-
-      let newLine = line;
-
-      const dateMatch = newLine.match(dateRegex);
-      if (dateMatch) newLine = newLine.replace(dateRegex, '');
-
-      const costMatch = newLine.match(costRegex);
-      if (costMatch) newLine = newLine.replace(costRegex, '');
-      
-      if (assigneeRegex.test(newLine)) {
-        newLine = newLine.replace(assigneeRegex, '');
-      }
-      
-      if (userAlias) {
-        newLine = `${newLine.trim()} (@${userAlias})`;
-      }
-
-      if (costMatch) newLine = `${newLine}${costMatch[0]}`;
-      if (dateMatch) newLine = `${newLine}${dateMatch[0]}`;
-      
-      lines[absoluteLineIndex] = newLine;
-      return lines.join('\n');
-    });
-  }, [getAbsoluteLineIndex]);
-
-  const handleToggle = useCallback((lineIndex: number, isCompleted: boolean) => {
-    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
-    setMarkdown(prevMarkdown => {
-        const lines = prevMarkdown.split('\n');
-        if (absoluteLineIndex >= lines.length) return prevMarkdown;
-        const line = lines[absoluteLineIndex];
-
-        const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
-        let newLine = line.replace(dateRegex, '');
-
-        if (isCompleted) {
-            const today = new Date().toISOString().split('T')[0];
-            newLine = `${newLine.trim()} ~${today}`;
-        }
-        
-        const taskRegex = /^- \[( |x)\]/;
-        newLine = newLine.replace(taskRegex, `- [${isCompleted ? 'x' : ' '}]`);
-        
-        lines[absoluteLineIndex] = newLine;
-        return lines.join('\n');
-    });
-  }, [getAbsoluteLineIndex]);
-
-  const handleUpdateCompletionDate = useCallback((lineIndex: number, newDate: string) => {
-    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
-    setMarkdown(prevMarkdown => {
-        const lines = prevMarkdown.split('\n');
-        if (absoluteLineIndex >= lines.length) return prevMarkdown;
-        const line = lines[absoluteLineIndex];
-        const dateRegex = /~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
-        
-        lines[absoluteLineIndex] = line.replace(dateRegex, `~${newDate}`);
-        return lines.join('\n');
-    });
-  }, [getAbsoluteLineIndex]);
-
-  const handleUpdateDueDate = useCallback((lineIndex: number, newDate: string | null) => {
-    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
-    setMarkdown(prevMarkdown => {
-        const lines = prevMarkdown.split('\n');
-        if (absoluteLineIndex >= lines.length) return prevMarkdown;
-        let line = lines[absoluteLineIndex];
-
-        const dueDateRegex = /\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/;
-        const assigneeRegex = /\s\(@[a-zA-Z0-9_]+\)/;
-        const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)$/;
-        const completionDateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
-        
-        const assigneeMatch = line.match(assigneeRegex);
-        const costMatch = line.match(costRegex);
-        const completionDateMatch = line.match(completionDateRegex);
-
-        let baseText = line
-            .replace(dueDateRegex, '')
-            .replace(assigneeRegex, '')
-            .replace(costRegex, '')
-            .replace(completionDateRegex, '')
-            .trim();
-
-        let newLine = baseText;
-        if (newDate) {
-            newLine += ` !${newDate}`;
-        }
-        if (assigneeMatch) {
-            newLine += assigneeMatch[0];
-        }
-        if (costMatch) {
-            newLine += costMatch[0];
-        }
-        if (completionDateMatch) {
-            newLine += completionDateMatch[0];
-        }
-
-        lines[absoluteLineIndex] = newLine;
-        return lines.join('\n');
-    });
-  }, [getAbsoluteLineIndex]);
-
-  const handleUpdateCreationDate = useCallback((lineIndex: number, newDate: string) => {
-    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
-    setMarkdown(prevMarkdown => {
-        const lines = prevMarkdown.split('\n');
-        if (absoluteLineIndex >= lines.length) return prevMarkdown;
-        const line = lines[absoluteLineIndex];
-        const dateRegex = /\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
-        
-        if (dateRegex.test(line)) {
-            lines[absoluteLineIndex] = line.replace(dateRegex, `+${newDate}`);
-        } else {
-            // Add if it doesn't exist
-             const taskPrefixRegex = /^- \[( |x)\] /;
-            lines[absoluteLineIndex] = line.replace(taskPrefixRegex, `$&+${newDate} `);
-        }
-        return lines.join('\n');
-    });
-  }, [getAbsoluteLineIndex]);
-
-  const handleUpdateTaskText = useCallback((lineIndex: number, newText: string) => {
-    const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
-    setMarkdown(prevMarkdown => {
-        const lines = prevMarkdown.split('\n');
-        if (absoluteLineIndex >= lines.length) return prevMarkdown;
-
-        const originalLine = lines[absoluteLineIndex];
-        
-        const taskRegex = /^- \[( |x)\] (.*)/;
-        const taskMatch = originalLine.match(taskRegex);
-        if (!taskMatch) return prevMarkdown;
-
-        const prefix = `- [${taskMatch[1]}] `;
-        const content = taskMatch[2];
-
-        const assigneeRegex = /\s\(@[a-zA-Z0-9_]+\)/;
-        const completionDateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
-        const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)$/;
-        const creationDateRegex = /\s\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
-        const dueDateRegex = /\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/;
-
-        const completionDateMatch = content.match(completionDateRegex);
-        const costMatch = content.match(costRegex);
-        const assigneeMatch = content.match(assigneeRegex);
-        const creationDateMatch = content.match(creationDateRegex);
-        const dueDateMatch = content.match(dueDateRegex);
-
-        let metadata = '';
-        if (creationDateMatch) metadata += ` ${creationDateMatch[0].trim()}`;
-        if (dueDateMatch) metadata += ` ${dueDateMatch[0].trim()}`;
-        if (assigneeMatch) metadata += ` ${assigneeMatch[0].trim()}`;
-        if (costMatch) metadata += ` ${costMatch[0].trim()}`;
-        if (completionDateMatch) metadata += ` ${completionDateMatch[0].trim()}`;
-        
-        lines[absoluteLineIndex] = `${prefix}${newText}${metadata}`;
-        return lines.join('\n');
-    });
-  }, [getAbsoluteLineIndex]);
-
-  const handleAddTaskUpdate = useCallback((taskLineIndex: number, updateText: string, assigneeAlias: string | null) => {
-    const absoluteTaskLineIndex = getAbsoluteLineIndex(taskLineIndex);
-    setMarkdown(prevMarkdown => {
-        const lines = prevMarkdown.split('\n');
-        const today = new Date().toISOString().split('T')[0];
-        const assigneeString = assigneeAlias ? ` (@${assigneeAlias})` : '';
-        const newUpdateLine = `  - ${today}: ${updateText}${assigneeString}`;
-
-        let insertAt = absoluteTaskLineIndex + 1;
-        const updateRegex = /^  - \d{4}-\d{2}-\d{2}: .*/;
-        while (insertAt < lines.length && (updateRegex.test(lines[insertAt]) || lines[insertAt].trim() === '')) {
-            if (updateRegex.test(lines[insertAt])) {
-                 insertAt++;
-            } else {
-                break;
-            }
-        }
-
-        lines.splice(insertAt, 0, newUpdateLine);
-        return lines.join('\n');
-    });
-  }, [getAbsoluteLineIndex]);
-  
   const handleAddBulkTaskUpdates = useCallback((taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => {
     setMarkdown(prevMarkdown => {
         const lines = prevMarkdown.split('\n');
@@ -489,29 +320,6 @@ const App: React.FC = () => {
         return lines.join('\n');
     });
   }, []);
-
-  const handleUpdateTaskUpdate = useCallback((updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => {
-      const absoluteUpdateLineIndex = getAbsoluteLineIndex(updateLineIndex);
-      setMarkdown(prevMarkdown => {
-          const lines = prevMarkdown.split('\n');
-          if (absoluteUpdateLineIndex < lines.length) {
-              const assigneeString = newAlias ? ` (@${newAlias})` : '';
-              lines[absoluteUpdateLineIndex] = `  - ${newDate}: ${newText}${assigneeString}`;
-          }
-          return lines.join('\n');
-      });
-  }, [getAbsoluteLineIndex]);
-
-  const handleDeleteTaskUpdate = useCallback((updateLineIndex: number) => {
-      const absoluteUpdateLineIndex = getAbsoluteLineIndex(updateLineIndex);
-      setMarkdown(prevMarkdown => {
-          const lines = prevMarkdown.split('\n');
-          if (absoluteUpdateLineIndex < lines.length) {
-              lines.splice(absoluteUpdateLineIndex, 1);
-          }
-          return lines.join('\n');
-      });
-  }, [getAbsoluteLineIndex]);
 
   const handleUpdateUser = useCallback((oldAlias: string, updatedUser: User) => {
     setUsers(prevUsers => prevUsers.map(u => u.alias === oldAlias ? updatedUser : u));
@@ -610,15 +418,8 @@ const App: React.FC = () => {
               markdown={displayMarkdown}
               users={users}
               onSectionUpdate={handleSectionUpdate}
-              onAssign={handleAssign}
               onToggle={handleToggle}
-              onUpdateCompletionDate={handleUpdateCompletionDate}
-              onUpdateCreationDate={handleUpdateCreationDate}
-              onUpdateDueDate={handleUpdateDueDate}
-              onUpdateTaskText={handleUpdateTaskText}
-              onAddTaskUpdate={handleAddTaskUpdate}
-              onUpdateTaskUpdate={handleUpdateTaskUpdate}
-              onDeleteTaskUpdate={handleDeleteTaskUpdate}
+              onUpdateTaskBlock={handleUpdateTaskBlock}
             />
         );
       case 'users':
