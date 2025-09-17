@@ -1,3 +1,5 @@
+
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { BookUp, Upload, Download, FileText, CalendarDays } from 'lucide-react';
 import * as docx from 'docx';
@@ -79,6 +81,12 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
            if (task.cost !== undefined) {
                taskTextChildren.push(new docx.TextRun({ text: ` ($${task.cost.toFixed(2)})`, color: '2E8B57', size: 18, italics: true }));
            }
+            if (task.creationDate) {
+                taskTextChildren.push(new docx.TextRun({ text: ` (Created: ${formatDate(task.creationDate)})`, color: '808080', size: 18, italics: true }));
+            }
+            if (task.dueDate && !task.completed) {
+                taskTextChildren.push(new docx.TextRun({ text: ` (Due: ${formatDate(task.dueDate)})`, color: 'A52A2A', size: 18, italics: true }));
+            }
            if (task.completed && task.completionDate) {
                taskTextChildren.push(new docx.TextRun({ text: ` (Completed: ${formatDate(task.completionDate)})`, color: '808080', size: 18, italics: true }));
            }
@@ -206,8 +214,10 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
         
         const taskRegex = /^- \[( |x)\] (.*)/;
         const assigneeRegex = /\s\(@([a-zA-Z0-9_]+)\)/;
-        const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
-        const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)$/;
+        const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+        const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)/;
+        const creationDateRegex = /\s\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+        const dueDateRegex = /\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/;
         const updateRegex = /^  - (\d{4}-\d{2}-\d{2}): (.*)/;
 
         let i = 0;
@@ -217,30 +227,56 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
             if (taskMatch) {
                 let fullTaskText = taskMatch[2];
                 const completed = taskMatch[1] === 'x';
+                
                 let completionDate: string | null = null;
                 const dateMatch = fullTaskText.match(dateRegex);
                 if (dateMatch) {
                     completionDate = dateMatch[1];
-                    fullTaskText = fullTaskText.replace(dateRegex, '').trim();
+                    fullTaskText = fullTaskText.replace(dateMatch[0], '').trim();
                 }
+                
                 let cost: number | undefined = undefined;
                 const costMatch = fullTaskText.match(costRegex);
                 if (costMatch) {
                     cost = parseFloat(costMatch[1]);
-                    fullTaskText = fullTaskText.replace(costRegex, '').trim();
+                    fullTaskText = fullTaskText.replace(costMatch[0], '').trim();
                 }
+
+                let creationDate: string | null = null;
+                const creationDateMatch = fullTaskText.match(creationDateRegex);
+                if(creationDateMatch){
+                    creationDate = creationDateMatch[1];
+                    fullTaskText = fullTaskText.replace(creationDateMatch[0], '').trim();
+                }
+
+                let dueDate: string | null = null;
+                const dueDateMatch = fullTaskText.match(dueDateRegex);
+                if(dueDateMatch){
+                    dueDate = dueDateMatch[1];
+                    fullTaskText = fullTaskText.replace(dueDateMatch[0], '').trim();
+                }
+                
                 let assignee: User | null = null;
                 const assigneeMatch = fullTaskText.match(assigneeRegex);
                 if (assigneeMatch) {
                     assignee = userByAlias.get(assigneeMatch[1]) || null;
-                    fullTaskText = fullTaskText.replace(assigneeRegex, '').trim();
+                    fullTaskText = fullTaskText.replace(assigneeMatch[0], '').trim();
                 }
+
                 const taskRuns = createInlinesFromMarkdown(fullTaskText, completed ? { strike: true } : {});
                 const taskTextChildren: (docx.TextRun | docx.ExternalHyperlink)[] = [ new docx.TextRun(completed ? '☑ ' : '☐ '), ...taskRuns ];
+                
                 if (cost !== undefined) {
                     taskTextChildren.push(new docx.TextRun({ text: ` ($${cost.toFixed(2)})`, color: '2E8B57', size: 18, italics: true }));
                 }
                 if (assignee) taskTextChildren.push(new docx.TextRun({ text: ` (${assignee.name})`, color: '808080', size: 18, italics: true }));
+
+                if (creationDate) {
+                    taskTextChildren.push(new docx.TextRun({ text: ` (Created: ${formatDate(creationDate)})`, color: '808080', size: 18, italics: true }));
+                }
+                if (dueDate && !completed) {
+                    taskTextChildren.push(new docx.TextRun({ text: ` (Due: ${formatDate(dueDate)})`, color: 'A52A2A', size: 18, italics: true }));
+                }
                 if (completed && completionDate) {
                     taskTextChildren.push(new docx.TextRun({ text: ` (Completed: ${formatDate(completionDate)})`, color: '808080', size: 18, italics: true }));
                 }

@@ -1,9 +1,10 @@
 
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Bold, Italic, List, ListTodo, UserPlus, Link, Mail, MessageSquarePlus } from 'lucide-react';
+import { Bold, Italic, List, ListTodo, UserPlus, Link, Mail, MessageSquarePlus, CalendarDays } from 'lucide-react';
 import type { User } from '../types';
 
-type FormatType = 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update';
+type FormatType = 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update' | 'dueDate';
 
 interface ToolbarProps {
   onFormat: (type: FormatType) => void;
@@ -81,6 +82,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onFormat, onInsert, users }) => {
       <ToolbarButton onClick={() => onFormat('ul')} label="Unordered List"><List className="w-5 h-5" /></ToolbarButton>
       <ToolbarButton onClick={() => onFormat('task')} label="Task List"><ListTodo className="w-5 h-5" /></ToolbarButton>
       <ToolbarButton onClick={() => onFormat('update')} label="Add Update Note"><MessageSquarePlus className="w-5 h-5" /></ToolbarButton>
+      <ToolbarButton onClick={() => onFormat('dueDate')} label="Add Due Date"><CalendarDays className="w-5 h-5" /></ToolbarButton>
       
       <div className="w-px h-6 bg-slate-700 mx-2"></div>
 

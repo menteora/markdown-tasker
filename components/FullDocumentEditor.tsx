@@ -5,6 +5,7 @@ import { Save, X } from 'lucide-react';
 import type { User } from '../types';
 import Toolbar from './Toolbar';
 import InputModal from './InputModal';
+import DatePickerModal from './DatePickerModal';
 
 interface FullDocumentEditorProps {
   content: string;
@@ -23,6 +24,7 @@ const FullDocumentEditor: React.FC<FullDocumentEditorProps> = ({ content, onChan
       label: string;
       confirmText: string;
   } | null>(null);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   const handleInsertTextAtCursor = useCallback((text: string) => {
     const textarea = textareaRef.current;
@@ -40,7 +42,26 @@ const FullDocumentEditor: React.FC<FullDocumentEditorProps> = ({ content, onChan
     }, 0);
   }, [content, onChange]);
 
-  const handleFormat = useCallback((type: 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update') => {
+  const handleDateSelect = useCallback((date: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const { selectionStart, selectionEnd } = textarea;
+    const charBefore = selectionStart > 0 ? content[selectionStart - 1] : '\n';
+    const spaceBefore = /\s$/.test(charBefore) ? '' : ' ';
+    const insertion = `${spaceBefore}!${date}`;
+
+    const newText = content.substring(0, selectionStart) + insertion + content.substring(selectionEnd);
+    onChange(newText);
+    
+    setTimeout(() => {
+        textarea.focus();
+        const newCursorPos = selectionStart + insertion.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  }, [content, onChange]);
+
+  const handleFormat = useCallback((type: 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update' | 'dueDate') => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     
@@ -109,11 +130,17 @@ const FullDocumentEditor: React.FC<FullDocumentEditorProps> = ({ content, onChan
         return;
     }
 
+    if (type === 'dueDate') {
+        setIsDatePickerOpen(true);
+        return;
+    }
+
 
     let prefix = '';
     let suffix = '';
     let insertion = '';
     let newCursorPos = -1;
+    let newText;
     
     switch (type) {
         case 'h1': prefix = '# '; break;
@@ -122,7 +149,32 @@ const FullDocumentEditor: React.FC<FullDocumentEditorProps> = ({ content, onChan
         case 'bold': prefix = '**'; suffix = '**'; break;
         case 'italic': prefix = '*'; suffix = '*'; break;
         case 'ul': prefix = '- '; break;
-        case 'task': prefix = '- [ ] '; break;
+        case 'task': {
+            const today = new Date().toISOString().split('T')[0];
+            if (selectionStart !== selectionEnd) { // Multi-line selection
+                const newLines = selectedText.split('\n').map(line => {
+                    if (line.trim() === '') return line;
+                    if (line.trim().match(/^[-*] \[( |x)\]/)) return line;
+                    return `- [ ] ${line.trim()} +${today}`;
+                }).join('\n');
+                
+                newText = content.substring(0, selectionStart) + newLines + content.substring(selectionEnd);
+                onChange(newText);
+                setTimeout(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                        textareaRef.current.setSelectionRange(selectionStart + newLines.length, selectionStart + newLines.length);
+                    }
+                }, 0);
+                return;
+            } else { // Single-line insertion
+                const textBeforeCursor = content.substring(0, selectionStart);
+                const atEndOfNonEmptyLine = selectionStart > 0 && content[selectionStart - 1] !== '\n';
+                prefix = (atEndOfNonEmptyLine ? '\n' : '') + '- [ ] ';
+                suffix = ` +${today}`;
+            }
+            break;
+        }
         case 'update': {
             const today = new Date().toISOString().split('T')[0];
             const textBeforeCursor = content.substring(0, selectionStart);
@@ -133,7 +185,6 @@ const FullDocumentEditor: React.FC<FullDocumentEditorProps> = ({ content, onChan
         }
     }
 
-    let newText;
     if (insertion) {
         newText = content.substring(0, selectionStart) + insertion + content.substring(selectionEnd);
     } else {
@@ -191,6 +242,13 @@ const FullDocumentEditor: React.FC<FullDocumentEditorProps> = ({ content, onChan
               confirmText={inputModalConfig.confirmText}
           />
       )}
+      <DatePickerModal
+          isOpen={isDatePickerOpen}
+          onClose={() => setIsDatePickerOpen(false)}
+          onSelectDate={handleDateSelect}
+          title="Select Due Date"
+          confirmText="Insert Date"
+      />
     </>
   );
 };
