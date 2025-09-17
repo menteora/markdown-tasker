@@ -98,8 +98,18 @@ const InteractiveTaskItem: React.FC<{
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   useEffect(() => {
-    setEditedContent(taskBlockContent);
-  }, [taskBlockContent]);
+    if (!isEditing) {
+      setEditedContent(taskBlockContent);
+    }
+  }, [taskBlockContent, isEditing]);
+
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+        const end = textareaRef.current.value.length;
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(end, end);
+    }
+  }, [isEditing]);
 
   useEffect(() => {
     if (isEditing && textareaRef.current) {
@@ -123,13 +133,17 @@ const InteractiveTaskItem: React.FC<{
         if (!textarea) return;
 
         const { selectionStart, selectionEnd } = textarea;
-        const newText = editedContent.substring(0, selectionStart) + text + editedContent.substring(selectionEnd);
+        const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
+        const spaceBefore = /\s$/.test(charBefore) ? '' : ' ';
+        const insertion = `${spaceBefore}${text}`;
+        
+        const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
         
         setEditedContent(newText);
         
         setTimeout(() => {
             textarea.focus();
-            const newCursorPos = selectionStart + text.length;
+            const newCursorPos = selectionStart + insertion.length;
             textarea.setSelectionRange(newCursorPos, newCursorPos);
         }, 0);
     }, [editedContent]);
@@ -444,6 +458,14 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
   useEffect(() => {
     setEditedContent(section.content);
   }, [section.content]);
+
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+        const end = textareaRef.current.value.length;
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(end, end);
+    }
+  }, [isEditing]);
   
   useEffect(() => {
     if (isEditing && textareaRef.current) {
@@ -546,13 +568,17 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
         if (!textarea) return;
 
         const { selectionStart, selectionEnd } = textarea;
-        const newText = editedContent.substring(0, selectionStart) + text + editedContent.substring(selectionEnd);
+        const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
+        const spaceBefore = /\s$/.test(charBefore) ? '' : ' ';
+        const insertion = `${spaceBefore}${text}`;
+
+        const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
         
         setEditedContent(newText);
         
         setTimeout(() => {
             textarea.focus();
-            const newCursorPos = selectionStart + text.length;
+            const newCursorPos = selectionStart + insertion.length;
             textarea.setSelectionRange(newCursorPos, newCursorPos);
         }, 0);
     }, [editedContent]);

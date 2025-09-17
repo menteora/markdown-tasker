@@ -206,20 +206,28 @@ const App: React.FC = () => {
   }, [viewScope, currentProjectIndex, projects]);
 
   const handleUpdateTaskBlock = useCallback((absoluteStartLine: number, originalLineCount: number, newContent: string) => {
+    const trueAbsoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex])
+      ? projects[currentProjectIndex].startLine + absoluteStartLine
+      : absoluteStartLine;
+
     setMarkdown(prev => {
         const lines = prev.split('\n');
-        const before = lines.slice(0, absoluteStartLine);
-        const after = lines.slice(absoluteStartLine + originalLineCount);
+        const before = lines.slice(0, trueAbsoluteStartLine);
+        const after = lines.slice(trueAbsoluteStartLine + originalLineCount);
         const newLines = newContent.split('\n');
         return [...before, ...newLines, ...after].join('\n');
     });
-  }, []);
+  }, [viewScope, currentProjectIndex, projects]);
   
   const handleToggle = useCallback((absoluteLineIndex: number, isCompleted: boolean) => {
+    const trueAbsoluteLineIndex = (viewScope === 'single' && projects[currentProjectIndex])
+      ? projects[currentProjectIndex].startLine + absoluteLineIndex
+      : absoluteLineIndex;
+
     setMarkdown(prevMarkdown => {
         const lines = prevMarkdown.split('\n');
-        if (absoluteLineIndex >= lines.length) return prevMarkdown;
-        const line = lines[absoluteLineIndex];
+        if (trueAbsoluteLineIndex >= lines.length) return prevMarkdown;
+        const line = lines[trueAbsoluteLineIndex];
 
         const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})/;
         let newLine = line.replace(dateRegex, '');
@@ -232,10 +240,10 @@ const App: React.FC = () => {
         const taskRegex = /^- \[( |x)\]/;
         newLine = newLine.replace(taskRegex, `- [${isCompleted ? 'x' : ' '}]`);
         
-        lines[absoluteLineIndex] = newLine;
+        lines[trueAbsoluteLineIndex] = newLine;
         return lines.join('\n');
     });
-  }, []);
+  }, [viewScope, currentProjectIndex, projects]);
 
   const handleToggleFullEdit = useCallback(() => {
     setFullEditContent(displayMarkdown);
