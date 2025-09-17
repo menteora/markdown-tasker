@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Bold, Italic, List, ListTodo, UserPlus, Link, Mail } from 'lucide-react';
+import { Bold, Italic, List, ListTodo, UserPlus, Link, Mail, MessageSquarePlus } from 'lucide-react';
 import type { User } from '../types';
 
-type FormatType = 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task';
+type FormatType = 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update';
 
 interface ToolbarProps {
   onFormat: (type: FormatType) => void;
@@ -20,6 +20,7 @@ interface ToolbarButtonProps {
 const ToolbarButton: React.FC<ToolbarButtonProps> = ({ onClick, label, children }) => (
   <button
     type="button"
+    onMouseDown={(e) => e.preventDefault()}
     onClick={onClick}
     className="p-2 rounded-md hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
     aria-label={label}
@@ -58,7 +59,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onFormat, onInsert, users }) => {
 
 
   const handleAssigneeSelect = (alias: string) => {
-    onInsert(` (@${alias})`);
+    onInsert(`(@${alias})`);
     setIsAssigneeDropdownOpen(false);
   };
 
@@ -79,6 +80,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onFormat, onInsert, users }) => {
 
       <ToolbarButton onClick={() => onFormat('ul')} label="Unordered List"><List className="w-5 h-5" /></ToolbarButton>
       <ToolbarButton onClick={() => onFormat('task')} label="Task List"><ListTodo className="w-5 h-5" /></ToolbarButton>
+      <ToolbarButton onClick={() => onFormat('update')} label="Add Update Note"><MessageSquarePlus className="w-5 h-5" /></ToolbarButton>
       
       <div className="w-px h-6 bg-slate-700 mx-2"></div>
 
@@ -100,6 +102,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onFormat, onInsert, users }) => {
               {filteredUsers.map(user => (
                 <button
                   key={user.alias}
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleAssigneeSelect(user.alias)}
                   className="w-full text-left flex items-center space-x-2 px-2 py-1.5 rounded-md hover:bg-slate-700"
                 >
