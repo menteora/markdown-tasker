@@ -122,7 +122,7 @@ const MentionAutocomplete: React.FC<MentionAutocompleteProps> = ({ users, positi
 };
 
 
-// Re-usable parsing functions and components from the old Preview.tsx
+// Re-usable parsing functions and components
 const parseInlineMarkdown = (text: string): React.ReactNode[] => {
   const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);
   return parts.map((part, index) => {
@@ -142,23 +142,60 @@ const UserPlusIcon: React.FC<{ className?: string }> = ({ className }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125v-1.5c0-.621.504-1.125 1.125-1.125H20.625c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504-1.125-1.125-1.125H3.375Z" />
   </svg>
 );
-// ... (AddUpdateForm, TaskUpdateItem, InteractiveTaskItem can be copied here if they are not shared)
-// For simplicity, including the necessary components directly.
-// In a larger app, these would be in their own files.
 
-// TaskUpdateItem Component - Simplified to remove edit/delete
-const TaskUpdateItem: React.FC<{ update: TaskUpdate; users: User[] }> = ({ update, users }) => {
+const EditableTaskUpdateItem: React.FC<{
+  update: TaskUpdate;
+  users: User[];
+  onUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
+  onDelete: (updateLineIndex: number) => void;
+}> = ({ update, users, onUpdate, onDelete }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedDate, setEditedDate] = useState(update.date);
+    const [editedText, setEditedText] = useState(update.text);
+    const [editedAlias, setEditedAlias] = useState(update.assigneeAlias);
     const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
     const assignee = update.assigneeAlias ? userByAlias.get(update.assigneeAlias) : null;
 
+    const handleSave = () => {
+        onUpdate(update.lineIndex, editedDate, editedText, editedAlias);
+        setIsEditing(false);
+    };
+
+    const handleCancel = () => {
+        setEditedDate(update.date);
+        setEditedText(update.text);
+        setEditedAlias(update.assigneeAlias);
+        setIsEditing(false);
+    };
+
+    if (isEditing) {
+        return (
+            <div className="flex items-center space-x-2 text-sm text-slate-400 w-full bg-slate-800 p-2 rounded-md">
+                <select value={editedAlias ?? ''} onChange={(e) => setEditedAlias(e.target.value || null)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none">
+                    <option value="">None</option>
+                    {users.map(u => <option key={u.alias} value={u.alias}>{u.name}</option>)}
+                </select>
+                <input type="date" value={editedDate} onChange={e => setEditedDate(e.target.value)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs font-mono focus:ring-1 focus:ring-indigo-500 outline-none" />
+                <input type="text" value={editedText} onChange={e => setEditedText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} className="flex-grow bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none" />
+                <button onClick={handleSave} className="p-1 rounded-md hover:bg-indigo-600 text-white flex-shrink-0"><Save className="w-4 h-4" /></button>
+                <button onClick={handleCancel} className="p-1 rounded-md hover:bg-slate-600 text-white flex-shrink-0"><X className="w-4 h-4" /></button>
+            </div>
+        );
+    }
+
     return (
-        <div className="flex items-center space-x-2 text-sm text-slate-400 w-full">
+        <div className="flex items-center space-x-2 text-sm text-slate-400 w-full group">
             {assignee ? <img src={assignee.avatarUrl} title={assignee.name} className="w-5 h-5 rounded-full flex-shrink-0" alt={assignee.name} /> : <div className="w-5 h-5 flex-shrink-0" />}
             <span className="font-mono text-slate-500 whitespace-nowrap">{update.date}:</span>
             <p className="flex-grow min-w-0"><InlineMarkdown text={update.text} /></p>
+            <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => setIsEditing(true)} className="p-1 rounded-md hover:bg-slate-700" title="Edit update"><Pencil className="w-3 h-3" /></button>
+                <button onClick={() => onDelete(update.lineIndex)} className="p-1 rounded-md hover:bg-red-500/80" title="Delete update"><Trash2 className="w-3 h-3" /></button>
+            </div>
         </div>
     );
 };
+
 
 // InteractiveTaskItem Component
 const InteractiveTaskItem: React.FC<{
@@ -168,16 +205,53 @@ const InteractiveTaskItem: React.FC<{
   onUpdateCompletionDate: (lineIndex: number, newDate: string) => void;
   onUpdateCreationDate: (lineIndex: number, newDate: string) => void;
   onUpdateDueDate: (lineIndex: number, newDate: string | null) => void;
+  onUpdateTaskText: (lineIndex: number, newText: string) => void;
+  onAddTaskUpdate: (taskLineIndex: number, updateText: string, assigneeAlias: string | null) => void;
+  onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
+  onDeleteTaskUpdate: (updateLineIndex: number) => void;
   users: User[];
 }> = (props) => {
-  const { lineIndex, text, completed, assignee, creationDate, completionDate, dueDate, updates, cost, onToggle, onAssign, onUpdateCompletionDate, onUpdateCreationDate, onUpdateDueDate, users } = props;
+  const { lineIndex, text, completed, assignee, completionDate, dueDate, updates, cost, users, ...handlers } = props;
+  const { onToggle, onAssign, onUpdateCompletionDate, onUpdateDueDate, onUpdateTaskText, onAddTaskUpdate, onUpdateTaskUpdate, onDeleteTaskUpdate } = handlers;
+  
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [editedText, setEditedText] = useState(text);
+  
+  const [isAddingUpdate, setIsAddingUpdate] = useState(false);
+  const [newUpdateText, setNewUpdateText] = useState('');
+  const [newUpdateAlias, setNewUpdateAlias] = useState<string | null>(null);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => { if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsDropdownOpen(false); };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleSaveText = () => {
+    if (editedText.trim()) {
+        onUpdateTaskText(lineIndex, editedText.trim());
+        setIsEditingText(false);
+    }
+  };
+
+  const handleCancelTextEdit = () => {
+    setEditedText(text);
+    setIsEditingText(false);
+  };
+  
+  const handleAddUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newUpdateText.trim()) {
+        onAddTaskUpdate(lineIndex, newUpdateText.trim(), newUpdateAlias);
+        setIsAddingUpdate(false);
+        setNewUpdateText('');
+        setNewUpdateAlias(null);
+    }
+  };
+
   const getDueDateInfo = (dateString: string | null, isCompleted: boolean): { color: string, label: string } => {
       if (!dateString || isCompleted) return { color: 'text-slate-400', label: 'Due date not set or task completed' };
       const today = new Date(); today.setHours(0, 0, 0, 0); const due = new Date(`${dateString}T00:00:00`);
@@ -190,34 +264,73 @@ const InteractiveTaskItem: React.FC<{
   
   return (
     <div className="py-2 border-b border-slate-800">
-        <div className="flex items-center space-x-3 group">
-            <input type="checkbox" checked={completed} onChange={(e) => onToggle(lineIndex, e.target.checked)} className="h-5 w-5 rounded-md bg-slate-700 border-slate-600 text-indigo-500 focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 cursor-pointer"/>
-            <span className={`flex-grow ${completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-              <InlineMarkdown text={text} />
-              {cost !== undefined && <span className="ml-2 text-xs font-semibold bg-green-200 text-green-800 px-2 py-0.5 rounded-full align-middle">${cost.toFixed(2)}</span>}
-            </span>
-            {!completed && (
-                <div title={dueDateInfo.label} className={`flex items-center space-x-1 ${dueDate ? '' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
-                    <CalendarDays className={`w-4 h-4 flex-shrink-0 ${dueDateInfo.color}`} />
-                    <input type="date" value={dueDate ?? ''} onChange={(e) => onUpdateDueDate(lineIndex, e.target.value || null)} className={`bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none ${dueDateInfo.color}`} aria-label="Due Date"/>
-                </div>
-            )}
-            {completed && completionDate && ( <input type="date" value={completionDate} onChange={(e) => onUpdateCompletionDate(lineIndex, e.target.value)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none" aria-label="Completion Date"/> )}
-            <div className="relative">
-                <button onClick={() => setIsDropdownOpen(p => !p)} className="flex items-center justify-center px-2 py-1 rounded-md transition-colors duration-200 bg-slate-800 hover:bg-slate-700">
-                    {assignee ? ( <div className="flex items-center space-x-2"><img src={assignee.avatarUrl} alt={assignee.name} className="h-6 w-6 rounded-full" /><span className="text-sm text-slate-300 font-medium">{assignee.name}</span></div>) 
-                              : ( <div className="flex items-center space-x-1 text-slate-400"><UserPlusIcon className="h-4 w-4" /><span className="text-sm font-medium">Assign</span></div> )}
-                </button>
-                {isDropdownOpen && (
-                    <div ref={dropdownRef} className="absolute right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 p-2">
-                        {users.map(user => (<button key={user.alias} onClick={() => { onAssign(lineIndex, user.alias); setIsDropdownOpen(false); }} className="w-full text-left flex items-center space-x-2 px-2 py-1.5 rounded-md hover:bg-slate-700"><img src={user.avatarUrl} alt={user.name} className="h-6 w-6 rounded-full" /><span className="text-sm text-slate-200">{user.name}</span></button>))}
-                        <div className="border-t border-slate-700 my-1"></div>
-                        <button onClick={() => { onAssign(lineIndex, null); setIsDropdownOpen(false); }} className="w-full text-left text-sm text-slate-400 px-2 py-1.5 rounded-md hover:bg-slate-700">Unassign</button>
+        <div className="flex items-start space-x-3 group">
+            <input type="checkbox" checked={completed} onChange={(e) => onToggle(lineIndex, e.target.checked)} className="h-5 w-5 rounded-md bg-slate-700 border-slate-600 text-indigo-500 focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 cursor-pointer flex-shrink-0 mt-1"/>
+            <div className="flex-grow min-w-0">
+                {isEditingText ? (
+                    <div className="flex items-center space-x-2">
+                        <input type="text" value={editedText} onChange={e => setEditedText(e.target.value)} onKeyDown={e => {if (e.key === 'Enter') handleSaveText(); if(e.key === 'Escape') handleCancelTextEdit();}} autoFocus className="w-full bg-slate-700 border border-slate-600 rounded-md p-1 text-sm focus:ring-1 focus:ring-indigo-500 outline-none" />
+                        <button onClick={handleSaveText} className="p-1.5 rounded-md hover:bg-indigo-600 text-white flex-shrink-0"><Save className="w-4 h-4" /></button>
+                        <button onClick={handleCancelTextEdit} className="p-1.5 rounded-md hover:bg-slate-600 text-white flex-shrink-0"><X className="w-4 h-4" /></button>
+                    </div>
+                ) : (
+                    <div className="flex items-center space-x-2">
+                        <span className={`flex-grow ${completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                          <InlineMarkdown text={text} />
+                          {cost !== undefined && <span className="ml-2 text-xs font-semibold bg-green-200 text-green-800 px-2 py-0.5 rounded-full align-middle">${cost.toFixed(2)}</span>}
+                        </span>
+                        <button onClick={() => setIsEditingText(true)} className="p-1 rounded-md hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" title="Edit task text"><Pencil className="w-3 h-3" /></button>
                     </div>
                 )}
             </div>
+            <div className="flex items-center space-x-2 flex-shrink-0">
+                {!completed && (
+                    <div title={dueDateInfo.label} className={`flex items-center space-x-1 ${dueDate ? '' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
+                        <CalendarDays className={`w-4 h-4 flex-shrink-0 ${dueDateInfo.color}`} />
+                        <input type="date" value={dueDate ?? ''} onChange={(e) => onUpdateDueDate(lineIndex, e.target.value || null)} className={`bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none w-32 ${dueDateInfo.color}`} aria-label="Due Date"/>
+                    </div>
+                )}
+                {completed && completionDate && ( <input type="date" value={completionDate} onChange={(e) => onUpdateCompletionDate(lineIndex, e.target.value)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none w-32" aria-label="Completion Date"/> )}
+                <div className="relative">
+                    <button onClick={() => setIsDropdownOpen(p => !p)} className="flex items-center justify-center px-2 py-1 rounded-md transition-colors duration-200 bg-slate-800 hover:bg-slate-700">
+                        {assignee ? ( <div className="flex items-center space-x-2"><img src={assignee.avatarUrl} alt={assignee.name} className="h-6 w-6 rounded-full" /><span className="text-sm text-slate-300 font-medium">{assignee.name}</span></div>) 
+                                  : ( <div className="flex items-center space-x-1 text-slate-400"><UserPlusIcon className="h-4 w-4" /><span className="text-sm font-medium">Assign</span></div> )}
+                    </button>
+                    {isDropdownOpen && (
+                        <div ref={dropdownRef} className="absolute right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 p-2">
+                            {users.map(user => (<button key={user.alias} onClick={() => { onAssign(lineIndex, user.alias); setIsDropdownOpen(false); }} className="w-full text-left flex items-center space-x-2 px-2 py-1.5 rounded-md hover:bg-slate-700"><img src={user.avatarUrl} alt={user.name} className="h-6 w-6 rounded-full" /><span className="text-sm text-slate-200">{user.name}</span></button>))}
+                            <div className="border-t border-slate-700 my-1"></div>
+                            <button onClick={() => { onAssign(lineIndex, null); setIsDropdownOpen(false); }} className="w-full text-left text-sm text-slate-400 px-2 py-1.5 rounded-md hover:bg-slate-700">Unassign</button>
+                        </div>
+                    )}
+                </div>
+                <button onClick={() => setIsAddingUpdate(p => !p)} className="p-2 rounded-full hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity" title="Add update"><MessageSquarePlus className="w-4 h-4" /></button>
+            </div>
         </div>
-        {updates.length > 0 && <div className="pl-8 mt-3 space-y-2 border-l-2 border-slate-800 ml-2.5">{updates.map(update => <TaskUpdateItem key={update.lineIndex} update={update} users={users} />)}</div>}
+        {(updates.length > 0 || isAddingUpdate) && (
+            <div className="pl-8 mt-3 space-y-2 border-l-2 border-slate-800 ml-2.5">
+                {updates.map(update => (
+                    <EditableTaskUpdateItem 
+                        key={update.lineIndex} 
+                        update={update} 
+                        users={users} 
+                        onUpdate={onUpdateTaskUpdate}
+                        onDelete={onDeleteTaskUpdate}
+                    />
+                ))}
+                {isAddingUpdate && (
+                     <form onSubmit={handleAddUpdate} className="flex items-center space-x-2 text-sm text-slate-400 w-full bg-slate-800 p-2 rounded-md">
+                         <select value={newUpdateAlias ?? ''} onChange={(e) => setNewUpdateAlias(e.target.value || null)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none">
+                            <option value="">None</option>
+                            {users.map(u => <option key={u.alias} value={u.alias}>{u.name}</option>)}
+                         </select>
+                         <input type="text" value={newUpdateText} onChange={e => setNewUpdateText(e.target.value)} autoFocus placeholder="Add new update..." className="flex-grow bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none" />
+                         <button type="submit" className="p-1 rounded-md hover:bg-indigo-600 text-white flex-shrink-0"><Save className="w-4 h-4" /></button>
+                         <button type="button" onClick={() => setIsAddingUpdate(false)} className="p-1 rounded-md hover:bg-slate-600 text-white flex-shrink-0"><X className="w-4 h-4" /></button>
+                     </form>
+                )}
+            </div>
+        )}
     </div>
   );
 };
@@ -233,6 +346,7 @@ interface EditableSectionProps {
   onUpdateCompletionDate: (lineIndex: number, newDate: string) => void;
   onUpdateCreationDate: (lineIndex: number, newDate: string) => void;
   onUpdateDueDate: (lineIndex: number, newDate: string | null) => void;
+  onUpdateTaskText: (lineIndex: number, newText: string) => void;
   onAddTaskUpdate: (taskLineIndex: number, updateText: string, assigneeAlias: string | null) => void;
   onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
   onDeleteTaskUpdate: (updateLineIndex: number) => void;
@@ -395,7 +509,8 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
                 const spaceAfter = /^\s$/.test(charAfter) ? '' : ' ';
                 
                 const linkText = selectedText || '🔗';
-                const insertion = spaceBefore + `[${linkText}](${url})` + spaceAfter;
+                const safeUrl = url.replace(/\(/g, '%28').replace(/\)/g, '%29');
+                const insertion = spaceBefore + `[${linkText}](${safeUrl})` + spaceAfter;
                 const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
                 setEditedContent(newText);
 
@@ -426,7 +541,8 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
 
                 const encodedQuery = encodeURIComponent(`subject:"${subject}"`);
                 const searchUrl = `https://mail.google.com/mail/u/0/#search/${encodedQuery}`;
-                const insertion = spaceBefore + `[📨 ${subject}](${searchUrl})` + spaceAfter;
+                const safeSearchUrl = searchUrl.replace(/\(/g, '%28').replace(/\)/g, '%29');
+                const insertion = spaceBefore + `[📨 ${subject}](${safeSearchUrl})` + spaceAfter;
                 const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
                 setEditedContent(newText);
 
@@ -514,7 +630,6 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
       
       const taskMatch = line.match(/^- \[( |x)\] (.*)/);
       if (taskMatch) {
-          // Task parsing logic copied from old Preview
           let fullTaskText = taskMatch[2]; let assignee: User | null = null; let completionDate: string | null = null; let creationDate: string | null = null; let cost: number | undefined = undefined; let dueDate: string | null = null;
           const dateMatch = fullTaskText.match(/\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/); if (dateMatch) { completionDate = dateMatch[1]; fullTaskText = fullTaskText.replace(dateMatch[0], '').trim(); }
           const costMatch = fullTaskText.match(/\s\(\$(\d+(\.\d{1,2})?)\)$/); if (costMatch) { cost = parseFloat(costMatch[1]); fullTaskText = fullTaskText.replace(costMatch[0], '').trim(); }
@@ -531,12 +646,26 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
               } else { if (updateLine.trim() !== '') break; j++; }
           }
           elements.push(
-            <InteractiveTaskItem key={i} lineIndex={i} text={fullTaskText} completed={taskMatch[1] === 'x'} assignee={assignee} creationDate={creationDate} completionDate={completionDate} dueDate={dueDate} updates={updates} cost={cost} 
+            <InteractiveTaskItem 
+                key={i} 
+                lineIndex={i} 
+                text={fullTaskText} 
+                completed={taskMatch[1] === 'x'} 
+                assignee={assignee} 
+                creationDate={creationDate} 
+                completionDate={completionDate} 
+                dueDate={dueDate} 
+                updates={updates} 
+                cost={cost} 
                 onAssign={(line, alias) => props.onAssign(absoluteLineIndex, alias)}
                 onToggle={(line, completed) => props.onToggle(absoluteLineIndex, completed)}
                 onUpdateCompletionDate={(line, date) => props.onUpdateCompletionDate(absoluteLineIndex, date)}
                 onUpdateCreationDate={(line, date) => props.onUpdateCreationDate(absoluteLineIndex, date)}
                 onUpdateDueDate={(line, date) => props.onUpdateDueDate(absoluteLineIndex, date)}
+                onUpdateTaskText={(line, text) => props.onUpdateTaskText(absoluteLineIndex, text)}
+                onAddTaskUpdate={(line, text, alias) => props.onAddTaskUpdate(absoluteLineIndex, text, alias)}
+                onUpdateTaskUpdate={props.onUpdateTaskUpdate}
+                onDeleteTaskUpdate={props.onDeleteTaskUpdate}
                 users={props.users} 
             />
           );

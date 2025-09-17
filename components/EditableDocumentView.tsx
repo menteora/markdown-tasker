@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { useSectionParser, Section } from '../hooks/useSectionParser';
 import type { User } from '../types';
@@ -13,6 +14,7 @@ interface EditableDocumentViewProps {
   onUpdateCompletionDate: (lineIndex: number, newDate: string) => void;
   onUpdateCreationDate: (lineIndex: number, newDate: string) => void;
   onUpdateDueDate: (lineIndex: number, newDate: string | null) => void;
+  onUpdateTaskText: (lineIndex: number, newText: string) => void;
   onAddTaskUpdate: (taskLineIndex: number, updateText: string, assigneeAlias: string | null) => void;
   onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
   onDeleteTaskUpdate: (updateLineIndex: number) => void;
