@@ -1,6 +1,6 @@
 
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Save, X } from 'lucide-react';
 import type { User } from '../types';
 import Toolbar from './Toolbar';
@@ -26,18 +26,30 @@ const FullDocumentEditor: React.FC<FullDocumentEditorProps> = ({ content, onChan
   } | null>(null);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
+  useEffect(() => {
+    if (textareaRef.current) {
+        const end = textareaRef.current.value.length;
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(end, end);
+    }
+  }, []);
+
   const handleInsertTextAtCursor = useCallback((text: string) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
     const { selectionStart, selectionEnd } = textarea;
-    const newText = content.substring(0, selectionStart) + text + content.substring(selectionEnd);
+    const charBefore = selectionStart > 0 ? content[selectionStart - 1] : '\n';
+    const spaceBefore = /\s$/.test(charBefore) ? '' : ' ';
+    const insertion = `${spaceBefore}${text}`;
+
+    const newText = content.substring(0, selectionStart) + insertion + content.substring(selectionEnd);
     
     onChange(newText);
     
     setTimeout(() => {
         textarea.focus();
-        const newCursorPos = selectionStart + text.length;
+        const newCursorPos = selectionStart + insertion.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
     }, 0);
   }, [content, onChange]);
