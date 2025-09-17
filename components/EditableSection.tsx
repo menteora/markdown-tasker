@@ -6,6 +6,7 @@ import { Section } from '../hooks/useSectionParser';
 import Toolbar from './Toolbar';
 import { Pencil, Save, X, CheckCircle2, CalendarDays } from 'lucide-react';
 import InputModal from './InputModal';
+import DatePickerModal from './DatePickerModal';
 
 
 // Autocomplete Component for @ mentions
@@ -94,6 +95,7 @@ const InteractiveTaskItem: React.FC<{
       label: string;
       confirmText: string;
   } | null>(null);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   useEffect(() => {
     setEditedContent(taskBlockContent);
@@ -132,7 +134,27 @@ const InteractiveTaskItem: React.FC<{
         }, 0);
     }, [editedContent]);
 
-  const handleFormat = useCallback((type: 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update') => {
+      const handleDateSelect = useCallback((date: string) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const { selectionStart, selectionEnd } = textarea;
+        const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
+        const spaceBefore = /\s$/.test(charBefore) ? '' : ' ';
+        const insertion = `${spaceBefore}!${date}`;
+
+        const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
+        setEditedContent(newText);
+        
+        setTimeout(() => {
+            textarea.focus();
+            const newCursorPos = selectionStart + insertion.length;
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }, 0);
+    }, [editedContent]);
+
+
+  const handleFormat = useCallback((type: 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update' | 'dueDate') => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     
@@ -200,12 +222,18 @@ const InteractiveTaskItem: React.FC<{
         setIsInputModalOpen(true);
         return;
     }
+    
+    if (type === 'dueDate') {
+        setIsDatePickerOpen(true);
+        return;
+    }
 
 
     let prefix = '';
     let suffix = '';
     let insertion = '';
     let newCursorPos = -1;
+    let newText;
     
     switch (type) {
         case 'h1': prefix = '# '; break;
@@ -214,7 +242,32 @@ const InteractiveTaskItem: React.FC<{
         case 'bold': prefix = '**'; suffix = '**'; break;
         case 'italic': prefix = '*'; suffix = '*'; break;
         case 'ul': prefix = '- '; break;
-        case 'task': prefix = '- [ ] '; break;
+        case 'task': {
+            const today = new Date().toISOString().split('T')[0];
+            if (selectionStart !== selectionEnd) { // Multi-line selection
+                const newLines = selectedText.split('\n').map(line => {
+                    if (line.trim() === '') return line;
+                    if (line.trim().match(/^[-*] \[( |x)\]/)) return line;
+                    return `- [ ] ${line.trim()} +${today}`;
+                }).join('\n');
+                
+                newText = editedContent.substring(0, selectionStart) + newLines + editedContent.substring(selectionEnd);
+                setEditedContent(newText);
+                setTimeout(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                        textareaRef.current.setSelectionRange(selectionStart + newLines.length, selectionStart + newLines.length);
+                    }
+                }, 0);
+                return;
+            } else { // Single-line insertion
+                const textBeforeCursor = editedContent.substring(0, selectionStart);
+                const atEndOfNonEmptyLine = selectionStart > 0 && editedContent[selectionStart - 1] !== '\n';
+                prefix = (atEndOfNonEmptyLine ? '\n' : '') + '- [ ] ';
+                suffix = ` +${today}`;
+            }
+            break;
+        }
         case 'update': {
             const today = new Date().toISOString().split('T')[0];
             const textBeforeCursor = editedContent.substring(0, selectionStart);
@@ -225,7 +278,6 @@ const InteractiveTaskItem: React.FC<{
         }
     }
 
-    let newText;
     if (insertion) {
         newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
     } else {
@@ -290,6 +342,13 @@ const InteractiveTaskItem: React.FC<{
                 confirmText={inputModalConfig.confirmText}
             />
         )}
+        <DatePickerModal
+            isOpen={isDatePickerOpen}
+            onClose={() => setIsDatePickerOpen(false)}
+            onSelectDate={handleDateSelect}
+            title="Select Due Date"
+            confirmText="Insert Date"
+        />
       </>
     );
   }
@@ -374,6 +433,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
       label: string;
       confirmText: string;
   } | null>(null);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   // Mention autocomplete state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -497,7 +557,26 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
         }, 0);
     }, [editedContent]);
 
-  const handleFormat = useCallback((type: 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update') => {
+  const handleDateSelect = useCallback((date: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const { selectionStart, selectionEnd } = textarea;
+    const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
+    const spaceBefore = /\s$/.test(charBefore) ? '' : ' ';
+    const insertion = `${spaceBefore}!${date}`;
+
+    const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
+    setEditedContent(newText);
+    
+    setTimeout(() => {
+        textarea.focus();
+        const newCursorPos = selectionStart + insertion.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  }, [editedContent]);
+
+  const handleFormat = useCallback((type: 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update' | 'dueDate') => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     
@@ -566,11 +645,16 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
         return;
     }
 
+    if (type === 'dueDate') {
+        setIsDatePickerOpen(true);
+        return;
+    }
 
     let prefix = '';
     let suffix = '';
     let insertion = '';
     let newCursorPos = -1;
+    let newText;
     
     switch (type) {
         case 'h1': prefix = '# '; break;
@@ -579,7 +663,32 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
         case 'bold': prefix = '**'; suffix = '**'; break;
         case 'italic': prefix = '*'; suffix = '*'; break;
         case 'ul': prefix = '- '; break;
-        case 'task': prefix = '- [ ] '; break;
+        case 'task': {
+            const today = new Date().toISOString().split('T')[0];
+            if (selectionStart !== selectionEnd) { // Multi-line selection
+                const newLines = selectedText.split('\n').map(line => {
+                    if (line.trim() === '') return line;
+                    if (line.trim().match(/^[-*] \[( |x)\]/)) return line;
+                    return `- [ ] ${line.trim()} +${today}`;
+                }).join('\n');
+                
+                newText = editedContent.substring(0, selectionStart) + newLines + editedContent.substring(selectionEnd);
+                setEditedContent(newText);
+                setTimeout(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                        textareaRef.current.setSelectionRange(selectionStart + newLines.length, selectionStart + newLines.length);
+                    }
+                }, 0);
+                return;
+            } else { // Single-line insertion
+                const textBeforeCursor = editedContent.substring(0, selectionStart);
+                const atEndOfNonEmptyLine = selectionStart > 0 && editedContent[selectionStart - 1] !== '\n';
+                prefix = (atEndOfNonEmptyLine ? '\n' : '') + '- [ ] ';
+                suffix = ` +${today}`;
+            }
+            break;
+        }
         case 'update': {
             const today = new Date().toISOString().split('T')[0];
             const textBeforeCursor = editedContent.substring(0, selectionStart);
@@ -590,7 +699,6 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
         }
     }
 
-    let newText;
     if (insertion) {
         newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
     } else {
@@ -638,8 +746,8 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
       const taskMatch = line.match(/^- \[( |x)\] (.*)/);
       if (taskMatch) {
           let fullTaskText = taskMatch[2]; let assignee: User | null = null; let completionDate: string | null = null; let creationDate: string | null = null; let cost: number | undefined = undefined; let dueDate: string | null = null;
-          const dateMatch = fullTaskText.match(/\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/); if (dateMatch) { completionDate = dateMatch[1]; fullTaskText = fullTaskText.replace(dateMatch[0], '').trim(); }
-          const costMatch = fullTaskText.match(/\s\(\$(\d+(\.\d{1,2})?)\)$/); if (costMatch) { cost = parseFloat(costMatch[1]); fullTaskText = fullTaskText.replace(costMatch[0], '').trim(); }
+          const dateMatch = fullTaskText.match(/\s~([0-9]{4}-[0-9]{2}-[0-9]{2})/); if (dateMatch) { completionDate = dateMatch[1]; fullTaskText = fullTaskText.replace(dateMatch[0], '').trim(); }
+          const costMatch = fullTaskText.match(/\s\(\$(\d+(\.\d{1,2})?)\)/); if (costMatch) { cost = parseFloat(costMatch[1]); fullTaskText = fullTaskText.replace(costMatch[0], '').trim(); }
           const assigneeMatch = fullTaskText.match(/\s\(@([a-zA-Z0-9_]+)\)/); if (assigneeMatch) { assignee = userByAlias.get(assigneeMatch[1]) || null; fullTaskText = fullTaskText.replace(assigneeMatch[0], '').trim(); }
           const creationDateMatch = fullTaskText.match(/\s\+([0-9]{4}-[0-9]{2}-[0-9]{2})/); if (creationDateMatch) { creationDate = creationDateMatch[1]; fullTaskText = fullTaskText.replace(creationDateMatch[0], '').trim(); }
           const dueDateMatch = fullTaskText.match(/\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/); if (dueDateMatch) { dueDate = dueDateMatch[1]; fullTaskText = fullTaskText.replace(dueDateMatch[0], '').trim(); }
@@ -727,6 +835,13 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
                 confirmText={inputModalConfig.confirmText}
             />
         )}
+        <DatePickerModal
+            isOpen={isDatePickerOpen}
+            onClose={() => setIsDatePickerOpen(false)}
+            onSelectDate={handleDateSelect}
+            title="Select Due Date"
+            confirmText="Insert Date"
+        />
       </>
     );
   }

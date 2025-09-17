@@ -56,8 +56,8 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
             
             const taskRegex = /^- \[( |x)\] (.*)/;
             const assigneeRegex = /\s\(@([a-zA-Z0-9_]+)\)/;
-            const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
-            const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)$/;
+            const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+            const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)/;
             const creationDateRegex = /\s\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
             const dueDateRegex = /\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/;
             const updateRegex = /^  - (\d{4}-\d{2}-\d{2}): (.*)/;

@@ -221,7 +221,7 @@ const App: React.FC = () => {
         if (absoluteLineIndex >= lines.length) return prevMarkdown;
         const line = lines[absoluteLineIndex];
 
-        const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
+        const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})/;
         let newLine = line.replace(dateRegex, '');
 
         if (isCompleted) {
