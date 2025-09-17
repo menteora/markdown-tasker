@@ -1,10 +1,10 @@
 
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import type { User, TaskUpdate, Heading } from '../types';
+import type { User, TaskUpdate, Task } from '../types';
 import { Section } from '../hooks/useSectionParser';
 import Toolbar from './Toolbar';
-import { Pencil, Save, X, MessageSquarePlus, Trash2, User as UserIcon, ChevronsUpDown, CalendarDays } from 'lucide-react';
+import { Pencil, Save, X, CheckCircle2, CalendarDays } from 'lucide-react';
 
 // Custom Modal to replace prompt()
 interface InputModalProps {
@@ -137,198 +137,121 @@ const parseInlineMarkdown = (text: string): React.ReactNode[] => {
 
 const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => <>{parseInlineMarkdown(text)}</>;
 
-const UserPlusIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125v-1.5c0-.621.504-1.125 1.125-1.125H20.625c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504-1.125-1.125-1.125H3.375Z" />
-  </svg>
-);
-
-const EditableTaskUpdateItem: React.FC<{
-  update: TaskUpdate;
-  users: User[];
-  onUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
-  onDelete: (updateLineIndex: number) => void;
-}> = ({ update, users, onUpdate, onDelete }) => {
-    const [isEditing, setIsEditing] = useState(false);
-    const [editedDate, setEditedDate] = useState(update.date);
-    const [editedText, setEditedText] = useState(update.text);
-    const [editedAlias, setEditedAlias] = useState(update.assigneeAlias);
-    const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
-    const assignee = update.assigneeAlias ? userByAlias.get(update.assigneeAlias) : null;
-
-    const handleSave = () => {
-        onUpdate(update.lineIndex, editedDate, editedText, editedAlias);
-        setIsEditing(false);
-    };
-
-    const handleCancel = () => {
-        setEditedDate(update.date);
-        setEditedText(update.text);
-        setEditedAlias(update.assigneeAlias);
-        setIsEditing(false);
-    };
-
-    if (isEditing) {
-        return (
-            <div className="flex items-center space-x-2 text-sm text-slate-400 w-full bg-slate-800 p-2 rounded-md">
-                <select value={editedAlias ?? ''} onChange={(e) => setEditedAlias(e.target.value || null)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none">
-                    <option value="">None</option>
-                    {users.map(u => <option key={u.alias} value={u.alias}>{u.name}</option>)}
-                </select>
-                <input type="date" value={editedDate} onChange={e => setEditedDate(e.target.value)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs font-mono focus:ring-1 focus:ring-indigo-500 outline-none" />
-                <input type="text" value={editedText} onChange={e => setEditedText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} className="flex-grow bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none" />
-                <button onClick={handleSave} className="p-1 rounded-md hover:bg-indigo-600 text-white flex-shrink-0"><Save className="w-4 h-4" /></button>
-                <button onClick={handleCancel} className="p-1 rounded-md hover:bg-slate-600 text-white flex-shrink-0"><X className="w-4 h-4" /></button>
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex items-center space-x-2 text-sm text-slate-400 w-full group">
-            {assignee ? <img src={assignee.avatarUrl} title={assignee.name} className="w-5 h-5 rounded-full flex-shrink-0" alt={assignee.name} /> : <div className="w-5 h-5 flex-shrink-0" />}
-            <span className="font-mono text-slate-500 whitespace-nowrap">{update.date}:</span>
-            <p className="flex-grow min-w-0"><InlineMarkdown text={update.text} /></p>
-            <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => setIsEditing(true)} className="p-1 rounded-md hover:bg-slate-700" title="Edit update"><Pencil className="w-3 h-3" /></button>
-                <button onClick={() => onDelete(update.lineIndex)} className="p-1 rounded-md hover:bg-red-500/80" title="Delete update"><Trash2 className="w-3 h-3" /></button>
-            </div>
-        </div>
-    );
-};
-
-
 // InteractiveTaskItem Component
 const InteractiveTaskItem: React.FC<{
-  lineIndex: number; text: string; completed: boolean; assignee: User | null; creationDate: string | null; completionDate: string | null; dueDate: string | null; updates: TaskUpdate[]; cost?: number;
-  onToggle: (lineIndex: number, isCompleted: boolean) => void;
-  onAssign: (lineIndex: number, userAlias: string | null) => void;
-  onUpdateCompletionDate: (lineIndex: number, newDate: string) => void;
-  onUpdateCreationDate: (lineIndex: number, newDate: string) => void;
-  onUpdateDueDate: (lineIndex: number, newDate: string | null) => void;
-  onUpdateTaskText: (lineIndex: number, newText: string) => void;
-  onAddTaskUpdate: (taskLineIndex: number, updateText: string, assigneeAlias: string | null) => void;
-  onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
-  onDeleteTaskUpdate: (updateLineIndex: number) => void;
+  task: Task;
+  taskBlockContent: string;
+  blockLineCount: number;
+  absoluteStartLine: number;
+  onToggle: (absoluteLineIndex: number, isCompleted: boolean) => void;
+  onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
   users: User[];
-}> = (props) => {
-  const { lineIndex, text, completed, assignee, completionDate, dueDate, updates, cost, users, ...handlers } = props;
-  const { onToggle, onAssign, onUpdateCompletionDate, onUpdateDueDate, onUpdateTaskText, onAddTaskUpdate, onUpdateTaskUpdate, onDeleteTaskUpdate } = handlers;
-  
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  const [isEditingText, setIsEditingText] = useState(false);
-  const [editedText, setEditedText] = useState(text);
-  
-  const [isAddingUpdate, setIsAddingUpdate] = useState(false);
-  const [newUpdateText, setNewUpdateText] = useState('');
-  const [newUpdateAlias, setNewUpdateAlias] = useState<string | null>(null);
+}> = ({ task, taskBlockContent, blockLineCount, absoluteStartLine, onToggle, onUpdateTaskBlock, users }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(taskBlockContent);
+  const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
+  const assignee = task.assigneeAlias ? userByAlias.get(task.assigneeAlias) : null;
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => { if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsDropdownOpen(false); };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    setEditedContent(taskBlockContent);
+  }, [taskBlockContent]);
 
-  const handleSaveText = () => {
-    if (editedText.trim()) {
-        onUpdateTaskText(lineIndex, editedText.trim());
-        setIsEditingText(false);
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
+  }, [isEditing, editedContent]);
+
+  const handleSave = () => {
+    onUpdateTaskBlock(absoluteStartLine, blockLineCount, editedContent);
+    setIsEditing(false);
   };
 
-  const handleCancelTextEdit = () => {
-    setEditedText(text);
-    setIsEditingText(false);
-  };
-  
-  const handleAddUpdate = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newUpdateText.trim()) {
-        onAddTaskUpdate(lineIndex, newUpdateText.trim(), newUpdateAlias);
-        setIsAddingUpdate(false);
-        setNewUpdateText('');
-        setNewUpdateAlias(null);
-    }
+  const handleCancel = () => {
+    setEditedContent(taskBlockContent);
+    setIsEditing(false);
   };
 
-  const getDueDateInfo = (dateString: string | null, isCompleted: boolean): { color: string, label: string } => {
-      if (!dateString || isCompleted) return { color: 'text-slate-400', label: 'Due date not set or task completed' };
+  const getDueDateInfo = (dateString: string | null, isCompleted: boolean): { pillColor: string; label: string } | null => {
+      if (!dateString || isCompleted) return null;
       const today = new Date(); today.setHours(0, 0, 0, 0); const due = new Date(`${dateString}T00:00:00`);
       const diffTime = due.getTime() - today.getTime(); const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (diffDays < 0) return { color: 'text-red-500', label: `Overdue` };
-      if (diffDays === 0) return { color: 'text-yellow-400', label: 'Due today' };
-      return { color: 'text-slate-400', label: `Due in ${diffDays} day(s)` };
+      if (diffDays < 0) return { pillColor: 'bg-red-500/20 text-red-400', label: `Overdue` };
+      if (diffDays === 0) return { pillColor: 'bg-yellow-500/20 text-yellow-400', label: 'Due today' };
+      return { pillColor: 'bg-slate-700/50 text-slate-300', label: `Due in ${diffDays} day(s)` };
   };
-  const dueDateInfo = getDueDateInfo(dueDate, completed);
+  const dueDateInfo = getDueDateInfo(task.dueDate, task.completed);
   
+  if (isEditing) {
+    return (
+      <div className="py-2 border-b border-indigo-500/30 bg-slate-800/30 rounded-lg p-3 my-2">
+        <textarea
+          ref={textareaRef}
+          value={editedContent}
+          onChange={(e) => setEditedContent(e.target.value)}
+          className="w-full p-2 bg-slate-900 border border-slate-700 rounded-md resize-y focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm leading-relaxed"
+          autoFocus
+        />
+        <div className="flex justify-end items-center mt-2 space-x-2">
+          <button onClick={handleCancel} className="px-3 py-1 rounded-md bg-slate-600 hover:bg-slate-500 font-semibold text-sm flex items-center space-x-2"><X className="w-4 h-4"/><span>Cancel</span></button>
+          <button onClick={handleSave} className="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 font-semibold text-sm flex items-center space-x-2"><Save className="w-4 h-4"/><span>Save</span></button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="py-2 border-b border-slate-800">
         <div className="flex items-start space-x-3 group">
-            <input type="checkbox" checked={completed} onChange={(e) => onToggle(lineIndex, e.target.checked)} className="h-5 w-5 rounded-md bg-slate-700 border-slate-600 text-indigo-500 focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 cursor-pointer flex-shrink-0 mt-1"/>
+            <input type="checkbox" checked={task.completed} onChange={(e) => onToggle(absoluteStartLine, e.target.checked)} className="h-5 w-5 rounded-md bg-slate-700 border-slate-600 text-indigo-500 focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 cursor-pointer flex-shrink-0 mt-1"/>
             <div className="flex-grow min-w-0">
-                {isEditingText ? (
-                    <div className="flex items-center space-x-2">
-                        <input type="text" value={editedText} onChange={e => setEditedText(e.target.value)} onKeyDown={e => {if (e.key === 'Enter') handleSaveText(); if(e.key === 'Escape') handleCancelTextEdit();}} autoFocus className="w-full bg-slate-700 border border-slate-600 rounded-md p-1 text-sm focus:ring-1 focus:ring-indigo-500 outline-none" />
-                        <button onClick={handleSaveText} className="p-1.5 rounded-md hover:bg-indigo-600 text-white flex-shrink-0"><Save className="w-4 h-4" /></button>
-                        <button onClick={handleCancelTextEdit} className="p-1.5 rounded-md hover:bg-slate-600 text-white flex-shrink-0"><X className="w-4 h-4" /></button>
-                    </div>
-                ) : (
-                    <div className="flex items-center space-x-2">
-                        <span className={`flex-grow ${completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-                          <InlineMarkdown text={text} />
-                          {cost !== undefined && <span className="ml-2 text-xs font-semibold bg-green-200 text-green-800 px-2 py-0.5 rounded-full align-middle">${cost.toFixed(2)}</span>}
-                        </span>
-                        <button onClick={() => setIsEditingText(true)} className="p-1 rounded-md hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" title="Edit task text"><Pencil className="w-3 h-3" /></button>
-                    </div>
-                )}
-            </div>
-            <div className="flex items-center space-x-2 flex-shrink-0">
-                {!completed && (
-                    <div title={dueDateInfo.label} className={`flex items-center space-x-1 ${dueDate ? '' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
-                        <CalendarDays className={`w-4 h-4 flex-shrink-0 ${dueDateInfo.color}`} />
-                        <input type="date" value={dueDate ?? ''} onChange={(e) => onUpdateDueDate(lineIndex, e.target.value || null)} className={`bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none w-32 ${dueDateInfo.color}`} aria-label="Due Date"/>
-                    </div>
-                )}
-                {completed && completionDate && ( <input type="date" value={completionDate} onChange={(e) => onUpdateCompletionDate(lineIndex, e.target.value)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none w-32" aria-label="Completion Date"/> )}
-                <div className="relative">
-                    <button onClick={() => setIsDropdownOpen(p => !p)} className="flex items-center justify-center px-2 py-1 rounded-md transition-colors duration-200 bg-slate-800 hover:bg-slate-700">
-                        {assignee ? ( <div className="flex items-center space-x-2"><img src={assignee.avatarUrl} alt={assignee.name} className="h-6 w-6 rounded-full" /><span className="text-sm text-slate-300 font-medium">{assignee.name}</span></div>) 
-                                  : ( <div className="flex items-center space-x-1 text-slate-400"><UserPlusIcon className="h-4 w-4" /><span className="text-sm font-medium">Assign</span></div> )}
-                    </button>
-                    {isDropdownOpen && (
-                        <div ref={dropdownRef} className="absolute right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 p-2">
-                            {users.map(user => (<button key={user.alias} onClick={() => { onAssign(lineIndex, user.alias); setIsDropdownOpen(false); }} className="w-full text-left flex items-center space-x-2 px-2 py-1.5 rounded-md hover:bg-slate-700"><img src={user.avatarUrl} alt={user.name} className="h-6 w-6 rounded-full" /><span className="text-sm text-slate-200">{user.name}</span></button>))}
-                            <div className="border-t border-slate-700 my-1"></div>
-                            <button onClick={() => { onAssign(lineIndex, null); setIsDropdownOpen(false); }} className="w-full text-left text-sm text-slate-400 px-2 py-1.5 rounded-md hover:bg-slate-700">Unassign</button>
-                        </div>
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className={`leading-snug ${task.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                      <InlineMarkdown text={task.text} />
+                    </span>
+                    {assignee && (
+                      <div className="inline-flex items-center space-x-1.5 bg-slate-700/60 text-slate-300 px-1.5 py-0.5 rounded-full text-xs whitespace-nowrap" title={`Assigned to ${assignee.name}`}>
+                        <img src={assignee.avatarUrl} alt={assignee.name} className="h-4 w-4 rounded-full" />
+                        <span>{assignee.name}</span>
+                      </div>
+                    )}
+                    {dueDateInfo && (
+                      <div className={`inline-flex items-center space-x-1 px-1.5 py-0.5 rounded-full text-xs whitespace-nowrap ${dueDateInfo.pillColor}`} title={dueDateInfo.label}>
+                        <CalendarDays className="w-3 h-3" />
+                        <span>{task.dueDate}</span>
+                      </div>
+                    )}
+                     {task.cost !== undefined && (
+                      <span className="inline-flex items-center font-semibold bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full text-xs whitespace-nowrap">
+                        ${task.cost.toFixed(2)}
+                      </span>
+                    )}
+                    {task.completionDate && task.completed && (
+                      <div className="inline-flex items-center space-x-1 bg-slate-700/60 text-slate-400 px-1.5 py-0.5 rounded-full text-xs whitespace-nowrap" title={`Completed on ${task.completionDate}`}>
+                        <CheckCircle2 className="w-3 h-3 text-green-500" />
+                        <span>{task.completionDate}</span>
+                      </div>
                     )}
                 </div>
-                <button onClick={() => setIsAddingUpdate(p => !p)} className="p-2 rounded-full hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity" title="Add update"><MessageSquarePlus className="w-4 h-4" /></button>
             </div>
+            <button onClick={() => setIsEditing(true)} className="p-2 rounded-full hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" title="Edit task and updates">
+              <Pencil className="w-4 h-4" />
+            </button>
         </div>
-        {(updates.length > 0 || isAddingUpdate) && (
+        {task.updates.length > 0 && (
             <div className="pl-8 mt-3 space-y-2 border-l-2 border-slate-800 ml-2.5">
-                {updates.map(update => (
-                    <EditableTaskUpdateItem 
-                        key={update.lineIndex} 
-                        update={update} 
-                        users={users} 
-                        onUpdate={onUpdateTaskUpdate}
-                        onDelete={onDeleteTaskUpdate}
-                    />
-                ))}
-                {isAddingUpdate && (
-                     <form onSubmit={handleAddUpdate} className="flex items-center space-x-2 text-sm text-slate-400 w-full bg-slate-800 p-2 rounded-md">
-                         <select value={newUpdateAlias ?? ''} onChange={(e) => setNewUpdateAlias(e.target.value || null)} className="bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none">
-                            <option value="">None</option>
-                            {users.map(u => <option key={u.alias} value={u.alias}>{u.name}</option>)}
-                         </select>
-                         <input type="text" value={newUpdateText} onChange={e => setNewUpdateText(e.target.value)} autoFocus placeholder="Add new update..." className="flex-grow bg-slate-700 border border-slate-600 rounded-md p-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none" />
-                         <button type="submit" className="p-1 rounded-md hover:bg-indigo-600 text-white flex-shrink-0"><Save className="w-4 h-4" /></button>
-                         <button type="button" onClick={() => setIsAddingUpdate(false)} className="p-1 rounded-md hover:bg-slate-600 text-white flex-shrink-0"><X className="w-4 h-4" /></button>
-                     </form>
-                )}
+                {task.updates.map(update => {
+                    const updateAssignee = update.assigneeAlias ? userByAlias.get(update.assigneeAlias) : null;
+                    return (
+                        <div key={update.lineIndex} className="flex items-center space-x-2 text-sm text-slate-400 w-full group">
+                            {updateAssignee ? <img src={updateAssignee.avatarUrl} title={updateAssignee.name} className="w-5 h-5 rounded-full flex-shrink-0" alt={updateAssignee.name} /> : <div className="w-5 h-5 flex-shrink-0" />}
+                            <span className="font-mono text-slate-500 whitespace-nowrap">{update.date}:</span>
+                            <p className="flex-grow min-w-0"><InlineMarkdown text={update.text} /></p>
+                        </div>
+                    );
+                })}
             </div>
         )}
     </div>
@@ -340,16 +263,8 @@ interface EditableSectionProps {
   section: Section;
   users: User[];
   onSectionUpdate: (startLine: number, endLine: number, newContent: string) => void;
-  // All the other handlers
   onToggle: (lineIndex: number, isCompleted: boolean) => void;
-  onAssign: (lineIndex: number, userAlias: string | null) => void;
-  onUpdateCompletionDate: (lineIndex: number, newDate: string) => void;
-  onUpdateCreationDate: (lineIndex: number, newDate: string) => void;
-  onUpdateDueDate: (lineIndex: number, newDate: string | null) => void;
-  onUpdateTaskText: (lineIndex: number, newText: string) => void;
-  onAddTaskUpdate: (taskLineIndex: number, updateText: string, assigneeAlias: string | null) => void;
-  onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
-  onDeleteTaskUpdate: (updateLineIndex: number) => void;
+  onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
 }
 
 const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpdate, ...props }) => {
@@ -645,27 +560,20 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
                   updates.push({ lineIndex: section.startLine + j, date: updateMatch[1], text: updateText, assigneeAlias: updateAssigneeAlias }); j++;
               } else { if (updateLine.trim() !== '') break; j++; }
           }
+          const task: Task = {
+            lineIndex: absoluteLineIndex, text: fullTaskText, completed: taskMatch[1] === 'x', assigneeAlias: assignee?.alias ?? null,
+            creationDate, completionDate, dueDate, updates, projectTitle: '', cost,
+          };
+
           elements.push(
             <InteractiveTaskItem 
                 key={i} 
-                lineIndex={i} 
-                text={fullTaskText} 
-                completed={taskMatch[1] === 'x'} 
-                assignee={assignee} 
-                creationDate={creationDate} 
-                completionDate={completionDate} 
-                dueDate={dueDate} 
-                updates={updates} 
-                cost={cost} 
-                onAssign={(line, alias) => props.onAssign(absoluteLineIndex, alias)}
-                onToggle={(line, completed) => props.onToggle(absoluteLineIndex, completed)}
-                onUpdateCompletionDate={(line, date) => props.onUpdateCompletionDate(absoluteLineIndex, date)}
-                onUpdateCreationDate={(line, date) => props.onUpdateCreationDate(absoluteLineIndex, date)}
-                onUpdateDueDate={(line, date) => props.onUpdateDueDate(absoluteLineIndex, date)}
-                onUpdateTaskText={(line, text) => props.onUpdateTaskText(absoluteLineIndex, text)}
-                onAddTaskUpdate={(line, text, alias) => props.onAddTaskUpdate(absoluteLineIndex, text, alias)}
-                onUpdateTaskUpdate={props.onUpdateTaskUpdate}
-                onDeleteTaskUpdate={props.onDeleteTaskUpdate}
+                task={task}
+                taskBlockContent={lines.slice(i, j).join('\n')}
+                blockLineCount={j - i}
+                absoluteStartLine={absoluteLineIndex}
+                onToggle={props.onToggle}
+                onUpdateTaskBlock={props.onUpdateTaskBlock}
                 users={props.users} 
             />
           );
