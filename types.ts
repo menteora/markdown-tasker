@@ -1,4 +1,5 @@
 
+
 export interface User {
   name: string;
   alias: string;
@@ -57,4 +58,5 @@ export interface Settings {
   emailPostamble: string;
   emailSignature: string;
   reminderMessage: string;
+  ccAlias?: string | null;
 }

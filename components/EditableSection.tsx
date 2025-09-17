@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { User, TaskUpdate, Heading } from '../types';
 import { Section } from '../hooks/useSectionParser';
@@ -294,13 +295,13 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
     const cursorPosition = textarea.selectionStart;
     const textBeforeCursor = editedContent.substring(0, cursorPosition);
     
-    const newText = textBeforeCursor.replace(/@(\w*)$/, `@${user.alias} `) + editedContent.substring(cursorPosition);
+    const newText = textBeforeCursor.replace(/@(\w*)$/, `(@${user.alias}) `) + editedContent.substring(cursorPosition);
     
     setEditedContent(newText);
     setMentionQuery(null);
 
     setTimeout(() => {
-        const newCursorPos = textBeforeCursor.lastIndexOf('@') + user.alias.length + 2;
+        const newCursorPos = textBeforeCursor.lastIndexOf('@') + user.alias.length + 4;
         textarea.focus();
         textarea.setSelectionRange(newCursorPos, newCursorPos);
     }, 0);
@@ -388,15 +389,20 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
             label: 'Enter the URL:',
             confirmText: 'Insert Link',
             onSubmit: (url) => {
+                const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
+                const charAfter = selectionEnd < editedContent.length ? editedContent[selectionEnd] : '\n';
+                const spaceBefore = /^\s$/.test(charBefore) ? '' : ' ';
+                const spaceAfter = /^\s$/.test(charAfter) ? '' : ' ';
+                
                 const linkText = selectedText || '🔗';
-                const insertion = `[${linkText}](${url})`;
+                const insertion = spaceBefore + `[${linkText}](${url})` + spaceAfter;
                 const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
                 setEditedContent(newText);
 
                 setTimeout(() => {
                     if (textareaRef.current) {
                         textareaRef.current.focus();
-                        const selStart = selectionStart + 1;
+                        const selStart = selectionStart + spaceBefore.length + 1;
                         const selEnd = selStart + linkText.length;
                         textareaRef.current.setSelectionRange(selStart, selEnd);
                     }
@@ -413,9 +419,14 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
             label: 'Enter the email subject:',
             confirmText: 'Create Link',
             onSubmit: (subject) => {
+                const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
+                const charAfter = selectionEnd < editedContent.length ? editedContent[selectionEnd] : '\n';
+                const spaceBefore = /^\s$/.test(charBefore) ? '' : ' ';
+                const spaceAfter = /^\s$/.test(charAfter) ? '' : ' ';
+
                 const encodedQuery = encodeURIComponent(`subject:"${subject}"`);
                 const searchUrl = `https://mail.google.com/mail/u/0/#search/${encodedQuery}`;
-                const insertion = `[📨 ${subject}](${searchUrl})`;
+                const insertion = spaceBefore + `[📨 ${subject}](${searchUrl})` + spaceAfter;
                 const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
                 setEditedContent(newText);
 
