@@ -18,9 +18,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
   }, [settings, isOpen]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    if (name === 'senderAlias') {
-      setCurrentSettings(prev => ({ ...prev, senderAlias: value || null }));
+    const { name, value, type } = e.target;
+    if (name === 'senderAlias' || name === 'ccAlias') {
+      setCurrentSettings(prev => ({ ...prev, [name]: value || null }));
+    } else if (type === 'number') {
+      setCurrentSettings(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
     } else {
       setCurrentSettings(prev => ({ ...prev, [name]: value }));
     }
@@ -35,15 +37,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50" aria-modal="true" role="dialog">
-      <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 border border-slate-700">
+      <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 border border-slate-700 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-slate-100">Email Settings</h2>
+          <h2 className="text-2xl font-bold text-slate-100">Settings</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-700 text-slate-400" aria-label="Close modal">
             <X className="w-6 h-6" />
           </button>
         </div>
         
-        <div className="space-y-6">
+        <h3 className="text-xl font-bold text-slate-200 mb-4 border-b border-slate-700 pb-2">Email Reminder Settings</h3>
+        <div className="space-y-6 pt-2">
           <div>
             <label htmlFor="senderAlias" className="block text-sm font-medium text-slate-300 mb-1">Reminder Assignee</label>
             <p className="text-xs text-slate-500 mb-2">Select a user to assign the reminder update note to.</p>
@@ -56,7 +59,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
             >
               <option value="">None (Just a note)</option>
               {users.map(user => (
-                <option key={user.alias} value={user.alias}>{user.name}</option>
+                <option key={user.alias} value={user.alias}>{user.name} ({user.email})</option>
               ))}
             </select>
           </div>
@@ -85,6 +88,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
               onChange={handleChange}
               className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
             />
+          </div>
+           <div>
+            <label htmlFor="ccAlias" className="block text-sm font-medium text-slate-300 mb-1">Default CC Assignee</label>
+            <p className="text-xs text-slate-500 mb-2">Optional. Select a user to CC on all reminder emails.</p>
+            <select
+              id="ccAlias"
+              name="ccAlias"
+              value={currentSettings.ccAlias ?? ''}
+              onChange={handleChange}
+              className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+            >
+              <option value="">None</option>
+              {users.map(user => (
+                <option key={user.alias} value={user.alias}>{user.name} ({user.email})</option>
+              ))}
+            </select>
           </div>
 
           <div>

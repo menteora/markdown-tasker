@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import UserManagement from './components/UserManagement';
 import ProjectOverview from './components/ProjectOverview';
@@ -12,6 +13,7 @@ import { useSettings } from './hooks/useSettings';
 import SettingsModal from './components/SettingsModal';
 import EditableDocumentView from './components/EditableDocumentView';
 import FullDocumentEditor from './components/FullDocumentEditor';
+import TimelineView from './components/TimelineView';
 
 const initialMarkdown = `# Project Titan Launch 🚀
 
@@ -47,7 +49,7 @@ This is a second project within the same file. You can switch between projects u
 - [ ] Migrate database to new server !2024-11-01 (@bob) ($3000)
 - [ ] Update server dependencies ($400)`;
 
-type View = 'editor' | 'users' | 'overview';
+type View = 'editor' | 'users' | 'overview' | 'timeline';
 type ViewScope = 'single' | 'all';
 
 const PROJECT_STORAGE_KEY = 'md-tasker-project-state';
@@ -260,6 +262,14 @@ const App: React.FC = () => {
   }, [projects, users]);
 
   const dataForOverview = viewScope === 'all' ? aggregatedData : currentProject;
+
+  const tasksForTimeline = useMemo(() => {
+    const sourceProjects = viewScope === 'all' ? projects : (currentProject ? [currentProject] : []);
+    const allTasks = sourceProjects.flatMap(p => [...p.unassignedTasks, ...Object.values(p.groupedTasks).flatMap(g => g.tasks)]);
+    return allTasks
+      .filter(task => task.dueDate)
+      .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
+  }, [projects, currentProject, viewScope]);
 
   const handleAssign = useCallback((lineIndex: number, userAlias: string | null) => {
     const absoluteLineIndex = getAbsoluteLineIndex(lineIndex);
@@ -530,14 +540,16 @@ const App: React.FC = () => {
     if (isFullEditMode) {
         return `Editing ${viewScope === 'all' ? 'the entire file' : `project: ${currentProject.title}`}.`;
     }
+    const title = viewScope === 'all' ? 'All Projects' : currentProject.title;
     switch(view) {
       case 'editor':
         return 'Hover over a section to edit its content individually.';
       case 'users':
         return 'Manage your team. Changes are saved to the project state.';
       case 'overview':
-        const title = viewScope === 'all' ? 'All Projects' : currentProject.title;
         return `Overview of tasks for "${title}".`;
+      case 'timeline':
+        return `Task due date timeline for "${title}".`;
     }
   }
 
@@ -591,6 +603,14 @@ const App: React.FC = () => {
             onAddBulkTaskUpdates={handleAddBulkTaskUpdates}
           />
         );
+      case 'timeline':
+        return (
+          <TimelineView
+            tasks={tasksForTimeline}
+            users={users}
+            viewScope={viewScope}
+          />
+        );
     }
   }
 
@@ -629,13 +649,19 @@ const App: React.FC = () => {
               onClick={() => setView('overview')}
               className={`px-4 py-2 rounded-md transition-colors font-semibold ${view === 'overview' ? 'bg-indigo-600' : 'bg-slate-700 hover:bg-slate-600'}`}
             >
-              Project Overview
+              Overview
+            </button>
+            <button
+              onClick={() => setView('timeline')}
+              className={`px-4 py-2 rounded-md transition-colors font-semibold ${view === 'timeline' ? 'bg-indigo-600' : 'bg-slate-700 hover:bg-slate-600'}`}
+            >
+              Timeline
             </button>
             <button
               onClick={() => setView('users')}
               className={`px-4 py-2 rounded-md transition-colors font-semibold ${view === 'users' ? 'bg-indigo-600' : 'bg-slate-700 hover:bg-slate-600'}`}
             >
-              Manage Assignees
+              Assignees
             </button>
           </nav>
           {view === 'editor' && !isFullEditMode && (
