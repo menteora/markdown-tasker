@@ -1,10 +1,125 @@
 
-
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { User, TaskUpdate, Heading } from '../types';
 import { Section } from '../hooks/useSectionParser';
 import Toolbar from './Toolbar';
-import { Pencil, Save, X, MessageSquarePlus, Trash2, User as UserIcon, ChevronsUpDown, Mail, CalendarDays } from 'lucide-react';
+import { Pencil, Save, X, MessageSquarePlus, Trash2, User as UserIcon, ChevronsUpDown, CalendarDays } from 'lucide-react';
+
+// Custom Modal to replace prompt()
+interface InputModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (value: string) => void;
+  title: string;
+  label: string;
+  confirmText?: string;
+}
+
+const InputModal: React.FC<InputModalProps> = ({ isOpen, onClose, onSubmit, title, label, confirmText = "Confirm" }) => {
+  const [value, setValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setValue('');
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (value.trim()) {
+      onSubmit(value.trim());
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50" aria-modal="true" role="dialog">
+      <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4 border border-slate-700">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-slate-100">{title}</h2>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-700 text-slate-400" aria-label="Close modal">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="text-slate-300 mb-6">
+            <label htmlFor="modal-input" className="block text-sm font-medium text-slate-300 mb-2">{label}</label>
+            <input
+              id="modal-input"
+              ref={inputRef}
+              type="text"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-3">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-md bg-slate-600 hover:bg-slate-500 transition-colors font-semibold">
+              Cancel
+            </button>
+            <button type="submit" className="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold">
+              {confirmText}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+
+// Autocomplete Component for @ mentions
+interface MentionAutocompleteProps {
+  users: User[];
+  position: { top: number; left: number };
+  onSelect: (user: User) => void;
+  activeIndex: number;
+}
+
+const MentionAutocomplete: React.FC<MentionAutocompleteProps> = ({ users, position, onSelect, activeIndex }) => {
+    const listRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        listRef.current?.querySelector(`[data-index="${activeIndex}"]`)?.scrollIntoView({
+            block: 'nearest',
+            inline: 'nearest'
+        });
+    }, [activeIndex]);
+
+    return (
+        <div
+            ref={listRef}
+            className="absolute bg-slate-900 border border-slate-700 rounded-md shadow-lg z-10 p-1 w-64 max-h-60 overflow-y-auto"
+            style={{ top: position.top, left: position.left }}
+            aria-live="polite"
+        >
+            {users.map((user, index) => (
+                <button
+                    key={user.alias}
+                    data-index={index}
+                    onClick={() => onSelect(user)}
+                    className={`w-full text-left flex items-center space-x-2 px-2 py-1.5 rounded-md ${
+                        activeIndex === index ? 'bg-indigo-600 text-white' : 'hover:bg-slate-700 text-slate-200'
+                    }`}
+                    role="option"
+                    aria-selected={activeIndex === index}
+                >
+                    <img src={user.avatarUrl} alt={user.name} className="h-6 w-6 rounded-full" />
+                    <div>
+                        <span className="text-sm font-medium">{user.name}</span>
+                        <span className="text-xs text-slate-400 ml-2">@{user.alias}</span>
+                    </div>
+                </button>
+            ))}
+        </div>
+    );
+};
+
 
 // Re-usable parsing functions and components from the old Preview.tsx
 const parseInlineMarkdown = (text: string): React.ReactNode[] => {
@@ -30,50 +145,20 @@ const UserPlusIcon: React.FC<{ className?: string }> = ({ className }) => (
 // For simplicity, including the necessary components directly.
 // In a larger app, these would be in their own files.
 
-// AddUpdateForm Component
-const AddUpdateForm: React.FC<{ onAdd: (text: string, assigneeAlias: string | null) => void; users: User[] }> = ({ onAdd, users }) => {
-    const [text, setText] = useState('');
-    const [assigneeAlias, setAssigneeAlias] = useState<string | null>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const assignee = useMemo(() => users.find(u => u.alias === assigneeAlias), [users, assigneeAlias]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (text.trim()) {
-            onAdd(text.trim(), assigneeAlias);
-            setText('');
-            setAssigneeAlias(null);
-        }
-    };
-    // Simplified version without dropdowns for brevity. Can be expanded.
-    return (
-        <form onSubmit={handleSubmit} className="flex items-start space-x-2 pt-3">
-            <MessageSquarePlus className="h-5 w-5 text-slate-500 mt-2 flex-shrink-0" />
-            <textarea ref={textareaRef} value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a new update..." rows={1}
-                className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none resize-none placeholder-slate-500" />
-            <button type="submit" className="px-3 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold text-sm disabled:bg-slate-600 disabled:cursor-not-allowed" disabled={!text.trim()} aria-label="Add Update">
-                Add
-            </button>
-        </form>
-    );
-};
-// TaskUpdateItem Component
-const TaskUpdateItem: React.FC<{ update: TaskUpdate; onUpdate: (...args: any) => void; onDelete: (lineIndex: number) => void; users: User[] }> = ({ update, onUpdate, onDelete, users }) => {
+// TaskUpdateItem Component - Simplified to remove edit/delete
+const TaskUpdateItem: React.FC<{ update: TaskUpdate; users: User[] }> = ({ update, users }) => {
     const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
     const assignee = update.assigneeAlias ? userByAlias.get(update.assigneeAlias) : null;
-    // Simplified view, no editing for brevity
+
     return (
-        <div className="group flex items-center space-x-2 text-sm text-slate-400 w-full">
-            {assignee ? <img src={assignee.avatarUrl} title={assignee.name} className="w-5 h-5 rounded-full flex-shrink-0" /> : <div className="w-5 h-5 flex-shrink-0" />}
+        <div className="flex items-center space-x-2 text-sm text-slate-400 w-full">
+            {assignee ? <img src={assignee.avatarUrl} title={assignee.name} className="w-5 h-5 rounded-full flex-shrink-0" alt={assignee.name} /> : <div className="w-5 h-5 flex-shrink-0" />}
             <span className="font-mono text-slate-500 whitespace-nowrap">{update.date}:</span>
             <p className="flex-grow min-w-0"><InlineMarkdown text={update.text} /></p>
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 flex-shrink-0">
-                <button onClick={() => alert("Editing updates not implemented in this view for brevity.")} className="p-1 rounded-md hover:bg-slate-700"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => onDelete(update.lineIndex)} className="p-1 rounded-md hover:bg-slate-700 text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
-            </div>
         </div>
     );
 };
+
 // InteractiveTaskItem Component
 const InteractiveTaskItem: React.FC<{
   lineIndex: number; text: string; completed: boolean; assignee: User | null; creationDate: string | null; completionDate: string | null; dueDate: string | null; updates: TaskUpdate[]; cost?: number;
@@ -82,13 +167,9 @@ const InteractiveTaskItem: React.FC<{
   onUpdateCompletionDate: (lineIndex: number, newDate: string) => void;
   onUpdateCreationDate: (lineIndex: number, newDate: string) => void;
   onUpdateDueDate: (lineIndex: number, newDate: string | null) => void;
-  onAddTaskUpdate: (taskLineIndex: number, updateText: string, assigneeAlias: string | null) => void;
-  onUpdateTaskUpdate: (updateLineIndex: number, newDate: string, newText: string, newAlias: string | null) => void;
-  onDeleteTaskUpdate: (updateLineIndex: number) => void;
   users: User[];
 }> = (props) => {
-  // FIX: Destructure onUpdateTaskUpdate from props.
-  const { lineIndex, text, completed, assignee, creationDate, completionDate, dueDate, updates, cost, onToggle, onAssign, onUpdateCompletionDate, onUpdateCreationDate, onUpdateDueDate, onAddTaskUpdate, onUpdateTaskUpdate, onDeleteTaskUpdate, users } = props;
+  const { lineIndex, text, completed, assignee, creationDate, completionDate, dueDate, updates, cost, onToggle, onAssign, onUpdateCompletionDate, onUpdateCreationDate, onUpdateDueDate, users } = props;
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -135,8 +216,7 @@ const InteractiveTaskItem: React.FC<{
                 )}
             </div>
         </div>
-        {updates.length > 0 && <div className="pl-8 mt-3 space-y-2 border-l-2 border-slate-800 ml-2.5">{updates.map(update => <TaskUpdateItem key={update.lineIndex} update={update} onUpdate={onUpdateTaskUpdate} onDelete={onDeleteTaskUpdate} users={users} />)}</div>}
-        <div className="pl-8"><AddUpdateForm onAdd={(text, alias) => onAddTaskUpdate(lineIndex, text, alias)} users={users} /></div>
+        {updates.length > 0 && <div className="pl-8 mt-3 space-y-2 border-l-2 border-slate-800 ml-2.5">{updates.map(update => <TaskUpdateItem key={update.lineIndex} update={update} users={users} />)}</div>}
     </div>
   );
 };
@@ -161,12 +241,41 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
   const [isEditing, setIsEditing] = useState(() => !section.content.trim());
   const [editedContent, setEditedContent] = useState(section.content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mirrorRef = useRef<HTMLDivElement>(null);
   const userByAlias = useMemo(() => new Map(props.users.map(u => [u.alias, u])), [props.users]);
+  
+  // Input Modal state
+  const [isInputModalOpen, setIsInputModalOpen] = useState(false);
+  const [inputModalConfig, setInputModalConfig] = useState<{
+      onSubmit: (value: string) => void;
+      title: string;
+      label: string;
+      confirmText: string;
+  } | null>(null);
+
+  // Mention autocomplete state
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionPosition, setMentionPosition] = useState<{ top: number, left: number } | null>(null);
+  const [filteredMentionUsers, setFilteredMentionUsers] = useState<User[]>([]);
+  const [activeMentionIndex, setActiveMentionIndex] = useState(0);
 
   useEffect(() => {
-    // If the content from props changes (e.g. from an external update), update our local state.
     setEditedContent(section.content);
   }, [section.content]);
+  
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [isEditing, editedContent]);
+  
+  useEffect(() => {
+    if (mentionQuery === null) {
+      setFilteredMentionUsers([]);
+    }
+  }, [mentionQuery]);
+
 
   const handleSave = () => {
     onSectionUpdate(section.startLine, section.endLine, editedContent);
@@ -177,20 +286,199 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
     setEditedContent(section.content);
     setIsEditing(false);
   };
-  
-  const handleFormat = useCallback((type: 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task') => {
+
+  const handleMentionSelect = useCallback((user: User) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    // Simplified format applicator
+
+    const cursorPosition = textarea.selectionStart;
+    const textBeforeCursor = editedContent.substring(0, cursorPosition);
+    
+    const newText = textBeforeCursor.replace(/@(\w*)$/, `@${user.alias} `) + editedContent.substring(cursorPosition);
+    
+    setEditedContent(newText);
+    setMentionQuery(null);
+
+    setTimeout(() => {
+        const newCursorPos = textBeforeCursor.lastIndexOf('@') + user.alias.length + 2;
+        textarea.focus();
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  }, [editedContent]);
+
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionQuery === null || filteredMentionUsers.length === 0) return;
+
+    if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (e.key === 'ArrowUp') {
+            setActiveMentionIndex(prev => (prev > 0 ? prev - 1 : filteredMentionUsers.length - 1));
+        } else if (e.key === 'ArrowDown') {
+            setActiveMentionIndex(prev => (prev < filteredMentionUsers.length - 1 ? prev + 1 : 0));
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            const user = filteredMentionUsers[activeMentionIndex];
+            if (user) handleMentionSelect(user);
+        } else if (e.key === 'Escape') {
+            setMentionQuery(null);
+        }
+    }
+  };
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const textarea = e.target;
+      const text = textarea.value;
+      setEditedContent(text);
+
+      const cursorPosition = textarea.selectionStart;
+      const textBeforeCursor = text.substring(0, cursorPosition);
+      const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
+
+      if (mentionMatch && mirrorRef.current && textareaRef.current) {
+          const query = mentionMatch[1].toLowerCase();
+          
+          const pre = text.substring(0, cursorPosition);
+          mirrorRef.current.textContent = pre;
+          const span = document.createElement('span');
+          mirrorRef.current.appendChild(span);
+          
+          const { offsetLeft: left, offsetTop: top, offsetHeight: height } = span;
+          
+          setMentionPosition({ top: top + height - textarea.scrollTop, left: left - textarea.scrollLeft });
+          setMentionQuery(query);
+          
+          const filtered = props.users.filter(user =>
+              user.alias.toLowerCase().includes(query) ||
+              user.name.toLowerCase().includes(query)
+          );
+          setFilteredMentionUsers(filtered);
+          setActiveMentionIndex(0);
+      } else {
+          setMentionQuery(null);
+      }
+  };
+  
+    const handleInsertTextAtCursor = useCallback((text: string) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const { selectionStart, selectionEnd } = textarea;
+        const newText = editedContent.substring(0, selectionStart) + text + editedContent.substring(selectionEnd);
+        
+        setEditedContent(newText);
+        
+        setTimeout(() => {
+            textarea.focus();
+            const newCursorPos = selectionStart + text.length;
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }, 0);
+    }, [editedContent]);
+
+  const handleFormat = useCallback((type: 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    
     const { selectionStart, selectionEnd } = textarea;
     const selectedText = editedContent.substring(selectionStart, selectionEnd);
-    let newText;
-    if (type === 'bold') newText = `**${selectedText}**`;
-    else if (type === 'italic') newText = `*${selectedText}*`;
-    else if (type === 'task') newText = `\n- [ ] `;
-    else newText = selectedText; // Fallback
     
-    setEditedContent(prev => prev.substring(0, selectionStart) + newText + prev.substring(selectionEnd));
+    if (type === 'link') {
+        setInputModalConfig({
+            title: 'Insert Link',
+            label: 'Enter the URL:',
+            confirmText: 'Insert Link',
+            onSubmit: (url) => {
+                const linkText = selectedText || '🔗';
+                const insertion = `[${linkText}](${url})`;
+                const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
+                setEditedContent(newText);
+
+                setTimeout(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                        const selStart = selectionStart + 1;
+                        const selEnd = selStart + linkText.length;
+                        textareaRef.current.setSelectionRange(selStart, selEnd);
+                    }
+                }, 0);
+            }
+        });
+        setIsInputModalOpen(true);
+        return;
+    }
+
+    if (type === 'gmail') {
+        setInputModalConfig({
+            title: 'Insert Gmail Link',
+            label: 'Enter the email subject:',
+            confirmText: 'Create Link',
+            onSubmit: (subject) => {
+                const encodedQuery = encodeURIComponent(`subject:"${subject}"`);
+                const searchUrl = `https://mail.google.com/mail/u/0/#search/${encodedQuery}`;
+                const insertion = `[📨 ${subject}](${searchUrl})`;
+                const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
+                setEditedContent(newText);
+
+                setTimeout(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                        const newCursorPos = selectionStart + insertion.length;
+                        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                    }
+                }, 0);
+            }
+        });
+        setIsInputModalOpen(true);
+        return;
+    }
+
+
+    let prefix = '';
+    let suffix = '';
+    let insertion = '';
+    let newCursorPos = -1;
+    
+    switch (type) {
+        case 'h1': prefix = '# '; break;
+        case 'h2': prefix = '## '; break;
+        case 'h3': prefix = '### '; break;
+        case 'bold': prefix = '**'; suffix = '**'; break;
+        case 'italic': prefix = '*'; suffix = '*'; break;
+        case 'ul': prefix = '- '; break;
+        case 'task': prefix = '- [ ] '; break;
+        case 'update': {
+            const today = new Date().toISOString().split('T')[0];
+            const textBeforeCursor = editedContent.substring(0, selectionStart);
+            const atStartOfLine = selectionStart === 0 || textBeforeCursor.endsWith('\n');
+            insertion = `${atStartOfLine ? '' : '\n'}  - ${today}: `;
+            newCursorPos = selectionStart + insertion.length;
+            break;
+        }
+    }
+
+    let newText;
+    if (insertion) {
+        newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
+    } else {
+        newText = editedContent.substring(0, selectionStart) + prefix + selectedText + suffix + editedContent.substring(selectionEnd);
+    }
+
+    setEditedContent(newText);
+    
+    setTimeout(() => {
+        if (textareaRef.current) {
+            textareaRef.current.focus();
+            if (newCursorPos !== -1) {
+                textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+            } else if (selectedText.length === 0) {
+                 const cursorPos = selectionStart + prefix.length;
+                textareaRef.current.setSelectionRange(cursorPos, cursorPos);
+            } else {
+                 textareaRef.current.setSelectionRange(selectionStart + prefix.length, selectionEnd + prefix.length);
+            }
+        }
+    }, 0);
+
   }, [editedContent]);
 
   const renderPreviewContent = () => {
@@ -228,7 +516,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
               if (updateMatch) {
                   let updateText = updateMatch[2].trim(); let updateAssigneeAlias: string | null = null;
                   const updateAssigneeMatch = updateText.match(/\s\(@([a-zA-Z0-9_]+)\)/); if(updateAssigneeMatch){ updateAssigneeAlias = updateAssigneeMatch[1]; updateText = updateText.replace(updateAssigneeMatch[0], '').trim(); }
-                  updates.push({ lineIndex: j, date: updateMatch[1], text: updateText, assigneeAlias: updateAssigneeAlias }); j++;
+                  updates.push({ lineIndex: section.startLine + j, date: updateMatch[1], text: updateText, assigneeAlias: updateAssigneeAlias }); j++;
               } else { if (updateLine.trim() !== '') break; j++; }
           }
           elements.push(
@@ -238,9 +526,6 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
                 onUpdateCompletionDate={(line, date) => props.onUpdateCompletionDate(absoluteLineIndex, date)}
                 onUpdateCreationDate={(line, date) => props.onUpdateCreationDate(absoluteLineIndex, date)}
                 onUpdateDueDate={(line, date) => props.onUpdateDueDate(absoluteLineIndex, date)}
-                onAddTaskUpdate={(line, text, alias) => props.onAddTaskUpdate(absoluteLineIndex, text, alias)}
-                onUpdateTaskUpdate={(line, ...args) => props.onUpdateTaskUpdate(section.startLine + line, ...args)}
-                onDeleteTaskUpdate={(line) => props.onDeleteTaskUpdate(section.startLine + line)}
                 users={props.users} 
             />
           );
@@ -257,24 +542,52 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
 
   if (isEditing) {
     return (
-      <div className="bg-slate-800/50 rounded-lg p-4 border border-indigo-500/50">
-        <Toolbar onFormat={handleFormat} onInsert={(text) => setEditedContent(prev => prev + text)} users={props.users} />
-        <textarea
-          ref={textareaRef}
-          value={editedContent}
-          onChange={(e) => setEditedContent(e.target.value)}
-          className="w-full h-auto min-h-[120px] mt-4 p-4 bg-slate-800 border border-slate-700 rounded-lg resize-y focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono text-slate-300 text-sm leading-relaxed"
-          autoFocus
-        />
-        <div className="flex justify-end items-center mt-4 space-x-3">
-          <button onClick={handleCancel} className="px-4 py-2 rounded-md bg-slate-600 hover:bg-slate-500 font-semibold flex items-center space-x-2">
-            <X className="w-4 h-4" /><span>Cancel</span>
-          </button>
-          <button onClick={handleSave} className="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 font-semibold flex items-center space-x-2">
-            <Save className="w-4 h-4" /><span>Save</span>
-          </button>
+      <>
+        <div className="bg-slate-800/50 rounded-lg p-4 border border-indigo-500/50">
+          <Toolbar onFormat={handleFormat} onInsert={handleInsertTextAtCursor} users={props.users} />
+          <div className="relative mt-4">
+              <div 
+                  ref={mirrorRef}
+                  className="w-full min-h-[120px] p-4 font-mono text-slate-300 text-sm leading-relaxed invisible absolute top-0 left-0 whitespace-pre-wrap break-words pointer-events-none"
+                  aria-hidden="true"
+              ></div>
+              <textarea
+                ref={textareaRef}
+                value={editedContent}
+                onChange={handleTextareaChange}
+                onKeyDown={handleTextareaKeyDown}
+                className="w-full min-h-[120px] p-4 bg-slate-800 border border-slate-700 rounded-lg resize-none overflow-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono text-slate-300 text-sm leading-relaxed"
+                autoFocus
+              />
+              {mentionQuery !== null && filteredMentionUsers.length > 0 && mentionPosition && (
+                  <MentionAutocomplete 
+                      users={filteredMentionUsers}
+                      position={mentionPosition}
+                      onSelect={handleMentionSelect}
+                      activeIndex={activeMentionIndex}
+                  />
+              )}
+          </div>
+          <div className="flex justify-end items-center mt-4 space-x-3">
+            <button onClick={handleCancel} className="px-4 py-2 rounded-md bg-slate-600 hover:bg-slate-500 font-semibold flex items-center space-x-2">
+              <X className="w-4 h-4" /><span>Cancel</span>
+            </button>
+            <button onClick={handleSave} className="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 font-semibold flex items-center space-x-2">
+              <Save className="w-4 h-4" /><span>Save</span>
+            </button>
+          </div>
         </div>
-      </div>
+        {isInputModalOpen && inputModalConfig && (
+            <InputModal
+                isOpen={isInputModalOpen}
+                onClose={() => setIsInputModalOpen(false)}
+                onSubmit={inputModalConfig.onSubmit}
+                title={inputModalConfig.title}
+                label={inputModalConfig.label}
+                confirmText={inputModalConfig.confirmText}
+            />
+        )}
+      </>
     );
   }
 
