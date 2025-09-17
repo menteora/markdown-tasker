@@ -410,6 +410,7 @@ const App: React.FC = () => {
               onChange={setFullEditContent}
               onSave={handleSaveFullEdit}
               onCancel={handleCancelFullEdit}
+              users={users}
             />
           );
         }

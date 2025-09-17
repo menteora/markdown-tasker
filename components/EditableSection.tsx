@@ -5,73 +5,7 @@ import type { User, TaskUpdate, Task } from '../types';
 import { Section } from '../hooks/useSectionParser';
 import Toolbar from './Toolbar';
 import { Pencil, Save, X, CheckCircle2, CalendarDays } from 'lucide-react';
-
-// Custom Modal to replace prompt()
-interface InputModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (value: string) => void;
-  title: string;
-  label: string;
-  confirmText?: string;
-}
-
-const InputModal: React.FC<InputModalProps> = ({ isOpen, onClose, onSubmit, title, label, confirmText = "Confirm" }) => {
-  const [value, setValue] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      setValue('');
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (value.trim()) {
-      onSubmit(value.trim());
-      onClose();
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50" aria-modal="true" role="dialog">
-      <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4 border border-slate-700">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-slate-100">{title}</h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-700 text-slate-400" aria-label="Close modal">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="text-slate-300 mb-6">
-            <label htmlFor="modal-input" className="block text-sm font-medium text-slate-300 mb-2">{label}</label>
-            <input
-              id="modal-input"
-              ref={inputRef}
-              type="text"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-              required
-            />
-          </div>
-          <div className="flex justify-end space-x-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-md bg-slate-600 hover:bg-slate-500 transition-colors font-semibold">
-              Cancel
-            </button>
-            <button type="submit" className="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold">
-              {confirmText}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
+import InputModal from './InputModal';
 
 
 // Autocomplete Component for @ mentions
@@ -152,6 +86,14 @@ const InteractiveTaskItem: React.FC<{
   const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
   const assignee = task.assigneeAlias ? userByAlias.get(task.assigneeAlias) : null;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  const [isInputModalOpen, setIsInputModalOpen] = useState(false);
+  const [inputModalConfig, setInputModalConfig] = useState<{
+      onSubmit: (value: string) => void;
+      title: string;
+      label: string;
+      confirmText: string;
+  } | null>(null);
 
   useEffect(() => {
     setEditedContent(taskBlockContent);
@@ -173,6 +115,141 @@ const InteractiveTaskItem: React.FC<{
     setEditedContent(taskBlockContent);
     setIsEditing(false);
   };
+  
+  const handleInsertTextAtCursor = useCallback((text: string) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const { selectionStart, selectionEnd } = textarea;
+        const newText = editedContent.substring(0, selectionStart) + text + editedContent.substring(selectionEnd);
+        
+        setEditedContent(newText);
+        
+        setTimeout(() => {
+            textarea.focus();
+            const newCursorPos = selectionStart + text.length;
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }, 0);
+    }, [editedContent]);
+
+  const handleFormat = useCallback((type: 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    
+    const { selectionStart, selectionEnd } = textarea;
+    const selectedText = editedContent.substring(selectionStart, selectionEnd);
+    
+    if (type === 'link') {
+        setInputModalConfig({
+            title: 'Insert Link',
+            label: 'Enter the URL:',
+            confirmText: 'Insert Link',
+            onSubmit: (url) => {
+                const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
+                const charAfter = selectionEnd < editedContent.length ? editedContent[selectionEnd] : '\n';
+                const spaceBefore = /^\s$/.test(charBefore) ? '' : ' ';
+                const spaceAfter = /^\s$/.test(charAfter) ? '' : ' ';
+                
+                const linkText = selectedText || '🔗';
+                const safeUrl = url.replace(/\(/g, '%28').replace(/\)/g, '%29');
+                const insertion = spaceBefore + `[${linkText}](${safeUrl})` + spaceAfter;
+                const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
+                setEditedContent(newText);
+
+                setTimeout(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                        const selStart = selectionStart + spaceBefore.length + 1;
+                        const selEnd = selStart + linkText.length;
+                        textareaRef.current.setSelectionRange(selStart, selEnd);
+                    }
+                }, 0);
+            }
+        });
+        setIsInputModalOpen(true);
+        return;
+    }
+
+    if (type === 'gmail') {
+        setInputModalConfig({
+            title: 'Insert Gmail Link',
+            label: 'Enter the email subject:',
+            confirmText: 'Create Link',
+            onSubmit: (subject) => {
+                const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
+                const charAfter = selectionEnd < editedContent.length ? editedContent[selectionEnd] : '\n';
+                const spaceBefore = /^\s$/.test(charBefore) ? '' : ' ';
+                const spaceAfter = /^\s$/.test(charAfter) ? '' : ' ';
+
+                const encodedQuery = encodeURIComponent(`subject:"${subject}"`);
+                const searchUrl = `https://mail.google.com/mail/u/0/#search/${encodedQuery}`;
+                const safeSearchUrl = searchUrl.replace(/\(/g, '%28').replace(/\)/g, '%29');
+                const insertion = spaceBefore + `[📨 ${subject}](${safeSearchUrl})` + spaceAfter;
+                const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
+                setEditedContent(newText);
+
+                setTimeout(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                        const newCursorPos = selectionStart + insertion.length;
+                        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                    }
+                }, 0);
+            }
+        });
+        setIsInputModalOpen(true);
+        return;
+    }
+
+
+    let prefix = '';
+    let suffix = '';
+    let insertion = '';
+    let newCursorPos = -1;
+    
+    switch (type) {
+        case 'h1': prefix = '# '; break;
+        case 'h2': prefix = '## '; break;
+        case 'h3': prefix = '### '; break;
+        case 'bold': prefix = '**'; suffix = '**'; break;
+        case 'italic': prefix = '*'; suffix = '*'; break;
+        case 'ul': prefix = '- '; break;
+        case 'task': prefix = '- [ ] '; break;
+        case 'update': {
+            const today = new Date().toISOString().split('T')[0];
+            const textBeforeCursor = editedContent.substring(0, selectionStart);
+            const atStartOfLine = selectionStart === 0 || textBeforeCursor.endsWith('\n');
+            insertion = `${atStartOfLine ? '' : '\n'}  - ${today}: `;
+            newCursorPos = selectionStart + insertion.length;
+            break;
+        }
+    }
+
+    let newText;
+    if (insertion) {
+        newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
+    } else {
+        newText = editedContent.substring(0, selectionStart) + prefix + selectedText + suffix + editedContent.substring(selectionEnd);
+    }
+
+    setEditedContent(newText);
+    
+    setTimeout(() => {
+        if (textareaRef.current) {
+            textareaRef.current.focus();
+            if (newCursorPos !== -1) {
+                textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+            } else if (selectedText.length === 0) {
+                 const cursorPos = selectionStart + prefix.length;
+                textareaRef.current.setSelectionRange(cursorPos, cursorPos);
+            } else {
+                 textareaRef.current.setSelectionRange(selectionStart + prefix.length, selectionEnd + prefix.length);
+            }
+        }
+    }, 0);
+
+  }, [editedContent]);
+
 
   const getDueDateInfo = (dateString: string | null, isCompleted: boolean): { pillColor: string; label: string } | null => {
       if (!dateString || isCompleted) return null;
@@ -186,19 +263,34 @@ const InteractiveTaskItem: React.FC<{
   
   if (isEditing) {
     return (
-      <div className="py-2 border-b border-indigo-500/30 bg-slate-800/30 rounded-lg p-3 my-2">
-        <textarea
-          ref={textareaRef}
-          value={editedContent}
-          onChange={(e) => setEditedContent(e.target.value)}
-          className="w-full p-2 bg-slate-900 border border-slate-700 rounded-md resize-y focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm leading-relaxed"
-          autoFocus
-        />
-        <div className="flex justify-end items-center mt-2 space-x-2">
-          <button onClick={handleCancel} className="px-3 py-1 rounded-md bg-slate-600 hover:bg-slate-500 font-semibold text-sm flex items-center space-x-2"><X className="w-4 h-4"/><span>Cancel</span></button>
-          <button onClick={handleSave} className="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 font-semibold text-sm flex items-center space-x-2"><Save className="w-4 h-4"/><span>Save</span></button>
+      <>
+        <div className="py-2 border-b border-indigo-500/30 bg-slate-800/30 rounded-lg p-3 my-2">
+          <div className="mb-2">
+            <Toolbar onFormat={handleFormat} onInsert={handleInsertTextAtCursor} users={users} />
+          </div>
+          <textarea
+            ref={textareaRef}
+            value={editedContent}
+            onChange={(e) => setEditedContent(e.target.value)}
+            className="w-full p-2 bg-slate-900 border border-slate-700 rounded-md resize-y focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm leading-relaxed"
+            autoFocus
+          />
+          <div className="flex justify-end items-center mt-2 space-x-2">
+            <button onClick={handleCancel} className="px-3 py-1 rounded-md bg-slate-600 hover:bg-slate-500 font-semibold text-sm flex items-center space-x-2"><X className="w-4 h-4"/><span>Cancel</span></button>
+            <button onClick={handleSave} className="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 font-semibold text-sm flex items-center space-x-2"><Save className="w-4 h-4"/><span>Save</span></button>
+          </div>
         </div>
-      </div>
+        {isInputModalOpen && inputModalConfig && (
+            <InputModal
+                isOpen={isInputModalOpen}
+                onClose={() => setIsInputModalOpen(false)}
+                onSubmit={inputModalConfig.onSubmit}
+                title={inputModalConfig.title}
+                label={inputModalConfig.label}
+                confirmText={inputModalConfig.confirmText}
+            />
+        )}
+      </>
     );
   }
 
