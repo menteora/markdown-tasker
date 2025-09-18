@@ -4,7 +4,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import type { User, TaskUpdate, Task } from '../types';
 import { Section } from '../hooks/useSectionParser';
 import Toolbar from './Toolbar';
-import { Pencil, Save, X, CheckCircle2, CalendarDays } from 'lucide-react';
+import { Pencil, Save, X, CheckCircle2, CalendarDays, ChevronRight } from 'lucide-react';
 import InputModal from './InputModal';
 import DatePickerModal from './DatePickerModal';
 
@@ -84,6 +84,7 @@ const InteractiveTaskItem: React.FC<{
 }> = ({ task, taskBlockContent, blockLineCount, absoluteStartLine, onToggle, onUpdateTaskBlock, users }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(taskBlockContent);
+  const [areUpdatesVisible, setAreUpdatesVisible] = useState(false);
   const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
   const assignee = task.assigneeAlias ? userByAlias.get(task.assigneeAlias) : null;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -406,18 +407,33 @@ const InteractiveTaskItem: React.FC<{
             </button>
         </div>
         {task.updates.length > 0 && (
-            <div className="pl-8 mt-3 space-y-2 border-l-2 border-slate-800 ml-2.5">
-                {task.updates.map(update => {
-                    const updateAssignee = update.assigneeAlias ? userByAlias.get(update.assigneeAlias) : null;
-                    return (
-                        <div key={update.lineIndex} className="flex items-center space-x-2 text-sm text-slate-400 w-full group">
-                            {updateAssignee ? <img src={updateAssignee.avatarUrl} title={updateAssignee.name} className="w-5 h-5 rounded-full flex-shrink-0" alt={updateAssignee.name} /> : <div className="w-5 h-5 flex-shrink-0" />}
-                            <span className="font-mono text-slate-500 whitespace-nowrap">{update.date}:</span>
-                            <p className="flex-grow min-w-0"><InlineMarkdown text={update.text} /></p>
-                        </div>
-                    );
-                })}
-            </div>
+            <>
+                <div className="pl-8 mt-2">
+                    <button
+                        onClick={() => setAreUpdatesVisible(v => !v)}
+                        className="flex items-center text-xs text-slate-400 hover:text-indigo-300 transition-colors py-1 rounded"
+                        aria-expanded={areUpdatesVisible}
+                        aria-controls={`updates-${task.lineIndex}`}
+                    >
+                        <ChevronRight className={`w-4 h-4 mr-1 transition-transform ${areUpdatesVisible ? 'rotate-90' : ''}`} />
+                        <span className="font-medium">{task.updates.length} update{task.updates.length > 1 ? 's' : ''}</span>
+                    </button>
+                </div>
+                {areUpdatesVisible && (
+                    <div id={`updates-${task.lineIndex}`} className="pl-8 mt-2 space-y-2 border-l-2 border-slate-800 ml-2.5">
+                        {task.updates.map(update => {
+                            const updateAssignee = update.assigneeAlias ? userByAlias.get(update.assigneeAlias) : null;
+                            return (
+                                <div key={update.lineIndex} className="flex items-center space-x-2 text-sm text-slate-400 w-full group">
+                                    {updateAssignee ? <img src={updateAssignee.avatarUrl} title={updateAssignee.name} className="w-5 h-5 rounded-full flex-shrink-0" alt={updateAssignee.name} /> : <div className="w-5 h-5 flex-shrink-0" />}
+                                    <span className="font-mono text-slate-500 whitespace-nowrap">{update.date}:</span>
+                                    <p className="flex-grow min-w-0"><InlineMarkdown text={update.text} /></p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </>
         )}
     </div>
   );
