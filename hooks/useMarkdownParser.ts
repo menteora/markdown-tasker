@@ -1,4 +1,5 @@
 
+
 import { useMemo } from 'react';
 import { User, Task, GroupedTasks, TaskUpdate, Project, Heading } from '../types';
 
@@ -45,6 +46,8 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
             projectBoundaries.push({ title: 'Project Overview', startLine: 0 });
         }
 
+        const existingSlugs = new Set<string>();
+
         projectBoundaries.forEach((boundary, idx) => {
             const startLine = boundary.startLine;
             const endLine = (idx + 1 < projectBoundaries.length) ? projectBoundaries[idx + 1].startLine - 1 : lines.length - 1;
@@ -52,7 +55,6 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
             const projectLines = lines.slice(startLine, endLine + 1);
             const currentProjectTasks: Task[] = [];
             const currentProjectHeadings: Heading[] = [];
-            const existingSlugs = new Set<string>();
             
             const taskRegex = /^- \[( |x)\] (.*)/;
             const assigneeRegex = /\s\(@([a-zA-Z0-9_]+)\)/;
