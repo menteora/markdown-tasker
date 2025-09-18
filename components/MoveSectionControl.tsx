@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Section } from '../hooks/useSectionParser';
-import { ChevronsUpDown } from 'lucide-react';
+import { ChevronsUpDown, CornerDownRight, ArrowUpToLine } from 'lucide-react';
 
 interface MoveSectionControlProps {
     allSections: Section[];
@@ -46,14 +46,15 @@ const MoveSectionControl: React.FC<MoveSectionControlProps> = ({ allSections, cu
             {isOpen && (
                 <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-30" role="menu">
                     <div className="p-1">
-                        <div className="px-2 py-1 text-xs font-semibold text-slate-400">Move section to...</div>
+                        <div className="px-2 py-1 text-xs font-semibold text-slate-400">Move section after...</div>
                         
                         {currentSectionIndex > 0 && (
                             <button
                                 onClick={() => handleMove(0)}
-                                className="w-full text-left px-3 py-2 text-sm rounded-md text-slate-200 hover:bg-slate-700"
+                                className="w-full text-left flex items-center px-3 py-2 text-sm rounded-md text-slate-200 hover:bg-slate-700"
                                 role="menuitem"
                             >
+                                <ArrowUpToLine className="w-4 h-4 mr-2 flex-shrink-0" />
                                 Top of file
                             </button>
                         )}
@@ -69,11 +70,12 @@ const MoveSectionControl: React.FC<MoveSectionControlProps> = ({ allSections, cu
                                 <button
                                     key={section.startLine}
                                     onClick={() => handleMove(section.endLine + 1)}
-                                    className="w-full text-left px-3 py-2 text-sm rounded-md text-slate-200 hover:bg-slate-700 truncate"
+                                    className="w-full text-left flex items-center px-3 py-2 text-sm rounded-md text-slate-200 hover:bg-slate-700"
                                     role="menuitem"
                                     title={`After: "${sectionTitle}"`}
                                 >
-                                    After: "{sectionTitle}"
+                                    <CornerDownRight className="w-4 h-4 mr-2 flex-shrink-0" />
+                                    <span className="truncate">"{sectionTitle}"</span>
                                 </button>
                             );
                         })}
