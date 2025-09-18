@@ -260,9 +260,21 @@ const App: React.FC = () => {
             ? destinationLine - sectionContent.length 
             : destinationLine;
 
+        const contentToInsert = [...sectionContent];
+
+        // Add a blank line before if the preceding line isn't already blank.
+        if (adjustedDestinationLine > 0 && linesWithoutSection[adjustedDestinationLine - 1]?.trim() !== '') {
+            contentToInsert.unshift('');
+        }
+
+        // Add a blank line after if the succeeding line isn't already blank.
+        if (adjustedDestinationLine < linesWithoutSection.length && linesWithoutSection[adjustedDestinationLine]?.trim() !== '') {
+            contentToInsert.push('');
+        }
+
         const newLines = [
             ...linesWithoutSection.slice(0, adjustedDestinationLine),
-            ...sectionContent,
+            ...contentToInsert,
             ...linesWithoutSection.slice(adjustedDestinationLine)
         ];
 
