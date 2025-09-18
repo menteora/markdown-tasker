@@ -1,7 +1,7 @@
 
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import type { User, TaskUpdate, Task } from '../types';
+import type { User, TaskUpdate, Task, Heading } from '../types';
 import { Section } from '../hooks/useSectionParser';
 import Toolbar from './Toolbar';
 import { Pencil, Save, X, CheckCircle2, CalendarDays, ChevronRight } from 'lucide-react';
@@ -9,6 +9,7 @@ import InputModal from './InputModal';
 import DatePickerModal from './DatePickerModal';
 import MoveSectionControl from './MoveSectionControl';
 import DuplicateSectionControl from './DuplicateSectionControl';
+import TableOfContents from './TableOfContents';
 
 
 // Autocomplete Component for @ mentions
@@ -452,9 +453,10 @@ interface EditableSectionProps {
   onDuplicateSection: (sectionToDuplicate: {startLine: number, endLine: number}, destinationLine: number) => void;
   onToggle: (lineIndex: number, isCompleted: boolean) => void;
   onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
+  tocHeadings?: Heading[];
 }
 
-const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, ...props }) => {
+const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, tocHeadings, ...props }) => {
   const [isEditing, setIsEditing] = useState(() => !section.content.trim());
   const [editedContent, setEditedContent] = useState(section.content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -779,7 +781,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
 
   }, [editedContent]);
 
-  const renderPreviewContent = () => {
+  const renderPreviewContent = (tocHeadingsForSlugs?: Heading[]) => {
     const lines = section.content.split('\n');
     const elements: React.ReactNode[] = [];
     let i = 0;
@@ -791,11 +793,12 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
       if (hMatch) {
           const level = hMatch[1].length;
           const text = hMatch[2].trim();
-          let className = "font-bold ";
+          const headingData = tocHeadingsForSlugs?.find(h => h.line === absoluteLineIndex);
+          let className = "font-bold scroll-mt-20 ";
           if (level === 1) className += "text-3xl mt-6 mb-3 pb-2 border-b border-slate-700";
           else if (level === 2) className += "text-2xl mt-5 mb-2";
           else if (level === 3) className += "text-xl mt-4 mb-1";
-          elements.push(React.createElement(`h${level}`, { key: i, className }, <InlineMarkdown text={text} />));
+          elements.push(React.createElement(`h${level}`, { key: i, className, id: headingData?.slug }, <InlineMarkdown text={text} />));
           i++; continue;
       }
       
@@ -904,6 +907,9 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
 
   return (
     <div className="relative group bg-slate-800/30 hover:bg-slate-800/50 rounded-lg transition-colors duration-200">
+       {tocHeadings && section.heading?.level === 1 && (
+        <TableOfContents headings={tocHeadings} />
+       )}
        <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
         <DuplicateSectionControl
             allSections={allSections}
@@ -924,7 +930,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
       </button>
       </div>
       <div className="p-4 prose-invert pb-8">
-        {renderPreviewContent()}
+        {renderPreviewContent(tocHeadings)}
       </div>
     </div>
   );
