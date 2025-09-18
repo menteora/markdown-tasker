@@ -245,6 +245,47 @@ const App: React.FC = () => {
     });
   }, [viewScope, currentProjectIndex, projects]);
 
+  const handleMoveSection = useCallback((sectionToMove: {startLine: number, endLine: number}, destinationLine: number) => {
+    setMarkdown(prev => {
+        const lines = prev.split('\n');
+        
+        const sectionContent = lines.slice(sectionToMove.startLine, sectionToMove.endLine + 1);
+        
+        const linesWithoutSection = [
+            ...lines.slice(0, sectionToMove.startLine),
+            ...lines.slice(sectionToMove.endLine + 1)
+        ];
+
+        const adjustedDestinationLine = destinationLine > sectionToMove.startLine 
+            ? destinationLine - sectionContent.length 
+            : destinationLine;
+
+        const newLines = [
+            ...linesWithoutSection.slice(0, adjustedDestinationLine),
+            ...sectionContent,
+            ...linesWithoutSection.slice(adjustedDestinationLine)
+        ];
+
+        return newLines.join('\n');
+    });
+  }, []);
+
+  const handleDuplicateSection = useCallback((sectionToDuplicate: {startLine: number, endLine: number}, destinationLine: number) => {
+    setMarkdown(prev => {
+        const lines = prev.split('\n');
+        
+        const sectionContent = lines.slice(sectionToDuplicate.startLine, sectionToDuplicate.endLine + 1);
+        
+        const newLines = [
+            ...lines.slice(0, destinationLine),
+            ...sectionContent,
+            ...lines.slice(destinationLine)
+        ];
+
+        return newLines.join('\n');
+    });
+  }, []);
+
   const handleToggleFullEdit = useCallback(() => {
     setFullEditContent(displayMarkdown);
     setIsFullEditMode(true);
@@ -429,6 +470,8 @@ const App: React.FC = () => {
               onSectionUpdate={handleSectionUpdate}
               onToggle={handleToggle}
               onUpdateTaskBlock={handleUpdateTaskBlock}
+              onMoveSection={handleMoveSection}
+              onDuplicateSection={handleDuplicateSection}
             />
         );
       case 'users':

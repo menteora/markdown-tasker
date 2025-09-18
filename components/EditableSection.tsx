@@ -7,6 +7,8 @@ import Toolbar from './Toolbar';
 import { Pencil, Save, X, CheckCircle2, CalendarDays, ChevronRight } from 'lucide-react';
 import InputModal from './InputModal';
 import DatePickerModal from './DatePickerModal';
+import MoveSectionControl from './MoveSectionControl';
+import DuplicateSectionControl from './DuplicateSectionControl';
 
 
 // Autocomplete Component for @ mentions
@@ -442,13 +444,17 @@ const InteractiveTaskItem: React.FC<{
 // The Main EditableSection Component
 interface EditableSectionProps {
   section: Section;
+  sectionIndex: number;
+  allSections: Section[];
   users: User[];
   onSectionUpdate: (startLine: number, endLine: number, newContent: string) => void;
+  onMoveSection: (sectionToMove: {startLine: number, endLine: number}, destinationLine: number) => void;
+  onDuplicateSection: (sectionToDuplicate: {startLine: number, endLine: number}, destinationLine: number) => void;
   onToggle: (lineIndex: number, isCompleted: boolean) => void;
   onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
 }
 
-const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpdate, ...props }) => {
+const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, ...props }) => {
   const [isEditing, setIsEditing] = useState(() => !section.content.trim());
   const [editedContent, setEditedContent] = useState(section.content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -505,6 +511,14 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
   const handleCancel = () => {
     setEditedContent(section.content);
     setIsEditing(false);
+  };
+
+  const handleMove = (destinationLine: number) => {
+    onMoveSection({ startLine: section.startLine, endLine: section.endLine }, destinationLine);
+  };
+  
+  const handleDuplicate = (destinationLine: number) => {
+    onDuplicateSection({ startLine: section.startLine, endLine: section.endLine }, destinationLine);
   };
 
   const handleMentionSelect = useCallback((user: User) => {
@@ -890,13 +904,25 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, onSectionUpd
 
   return (
     <div className="relative group bg-slate-800/30 hover:bg-slate-800/50 rounded-lg transition-colors duration-200">
+       <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+        <DuplicateSectionControl
+            allSections={allSections}
+            currentSectionIndex={sectionIndex}
+            onDuplicateSection={handleDuplicate}
+        />
+        <MoveSectionControl
+          allSections={allSections}
+          currentSectionIndex={sectionIndex}
+          onMoveSection={handleMove}
+        />
        <button 
         onClick={() => setIsEditing(true)} 
-        className="absolute top-2 right-2 z-10 p-2 rounded-full bg-slate-700/50 text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 hover:bg-indigo-600 hover:text-white"
+        className="p-2 rounded-full bg-slate-700/50 text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 hover:bg-indigo-600 hover:text-white"
         aria-label="Edit section"
       >
         <Pencil className="w-4 h-4" />
       </button>
+      </div>
       <div className="p-4 prose-invert pb-8">
         {renderPreviewContent()}
       </div>
