@@ -6,9 +6,10 @@ interface DuplicateSectionControlProps {
     allSections: Section[];
     currentSectionIndex: number;
     onDuplicateSection: (destinationLine: number) => void;
+    viewScope: 'single' | 'all';
 }
 
-const DuplicateSectionControl: React.FC<DuplicateSectionControlProps> = ({ allSections, currentSectionIndex, onDuplicateSection }) => {
+const DuplicateSectionControl: React.FC<DuplicateSectionControlProps> = ({ allSections, currentSectionIndex, onDuplicateSection, viewScope }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -29,6 +30,8 @@ const DuplicateSectionControl: React.FC<DuplicateSectionControlProps> = ({ allSe
 
     const currentSection = allSections[currentSectionIndex];
     if (!currentSection) return null;
+
+    const topText = viewScope === 'single' ? 'Top of project' : 'Top of file';
 
     return (
         <div className="relative" ref={dropdownRef}>
@@ -54,7 +57,7 @@ const DuplicateSectionControl: React.FC<DuplicateSectionControlProps> = ({ allSe
                             role="menuitem"
                         >
                             <ArrowUpToLine className="w-4 h-4 mr-2 flex-shrink-0" />
-                           Top of file
+                           <span>{topText}</span>
                         </button>
                         
                         {allSections.map((section) => {

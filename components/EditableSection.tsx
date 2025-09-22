@@ -453,9 +453,11 @@ interface EditableSectionProps {
   onToggle: (lineIndex: number, isCompleted: boolean) => void;
   onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
   tocHeadings?: Heading[];
+  viewScope: 'single' | 'all';
+  projectStartLine: number;
 }
 
-const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, tocHeadings, ...props }) => {
+const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, tocHeadings, viewScope, projectStartLine = 0, ...props }) => {
   const [isEditing, setIsEditing] = useState(() => !section.content.trim());
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [editedContent, setEditedContent] = useState(section.content);
@@ -792,7 +794,8 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
     let i = 0;
     while (i < lines.length) {
       const line = lines[i];
-      const absoluteLineIndex = section.startLine + i;
+      const relativeLineIndex = section.startLine + i;
+      const absoluteLineIndex = projectStartLine + relativeLineIndex;
 
       const hMatch = line.match(/^(#+) (.*)/);
       if (hMatch && i === 0 && section.heading) { // This is the main section heading.
@@ -816,15 +819,18 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
                   break;
           }
 
-          const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
+          // FIX: Use React.createElement for dynamic heading tag to resolve JSX namespace and type errors.
+          const HeadingTag = `h${level}`;
 
           elements.push(
-              <HeadingTag key={i} id={headingData?.slug} className={headingClassName}>
-                  <button className={buttonClassName} onClick={handleToggleCollapse} aria-expanded={!isCollapsed} aria-controls={`section-content-${section.startLine}`}>
-                      {isCollapsed ? <ChevronRight className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" /> : <ChevronDown className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" />}
-                      <span className="flex-grow"><InlineMarkdown text={text} /></span>
-                  </button>
-              </HeadingTag>
+              React.createElement(
+                HeadingTag,
+                { key: i, id: headingData?.slug, className: headingClassName },
+                <button className={buttonClassName} onClick={handleToggleCollapse} aria-expanded={!isCollapsed} aria-controls={`section-content-${section.startLine}`}>
+                    {isCollapsed ? <ChevronRight className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" /> : <ChevronDown className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" />}
+                    <span className="flex-grow"><InlineMarkdown text={text} /></span>
+                </button>
+              )
           );
           i++;
           continue;
@@ -858,7 +864,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
               } else { if (updateLine.trim() !== '') break; j++; }
           }
           const task: Task = {
-            lineIndex: absoluteLineIndex, text: fullTaskText, completed: taskMatch[1] === 'x', assigneeAlias: assignee?.alias ?? null,
+            lineIndex: relativeLineIndex, text: fullTaskText, completed: taskMatch[1] === 'x', assigneeAlias: assignee?.alias ?? null,
             creationDate, completionDate, dueDate, updates, projectTitle: '', cost,
           };
 
@@ -868,7 +874,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
                 task={task}
                 taskBlockContent={lines.slice(i, j).join('\n')}
                 blockLineCount={j - i}
-                absoluteStartLine={absoluteLineIndex}
+                absoluteStartLine={relativeLineIndex}
                 onToggle={props.onToggle}
                 onUpdateTaskBlock={props.onUpdateTaskBlock}
                 users={props.users} 
@@ -883,7 +889,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
       i++;
     }
     return elements;
-  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, handleToggleCollapse, isCollapsed]);
+  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, handleToggleCollapse, isCollapsed, projectStartLine]);
 
   if (isEditing) {
     return (
@@ -958,11 +964,13 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
             allSections={allSections}
             currentSectionIndex={sectionIndex}
             onDuplicateSection={handleDuplicate}
+            viewScope={viewScope}
         />
         <MoveSectionControl
           allSections={allSections}
           currentSectionIndex={sectionIndex}
           onMoveSection={handleMove}
+          viewScope={viewScope}
         />
        <button 
         onClick={() => setIsEditing(true)} 

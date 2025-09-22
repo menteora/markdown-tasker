@@ -139,7 +139,8 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
         projectsToExport.forEach((project, index) => {
             const allTasksInProject = [
                 ...project.unassignedTasks,
-                ...Object.values(project.groupedTasks).flatMap(g => g.tasks)
+                // FIX: Cast `g` to the correct type to resolve "Property 'tasks' does not exist on type 'unknown'".
+                ...Object.values(project.groupedTasks).flatMap(g => (g as { tasks: Task[] }).tasks)
             ];
 
             const tasksWithUpdatesOnDate = allTasksInProject.map(task => {
@@ -319,7 +320,8 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
         if (viewScope === 'all') {
             projects.forEach(project => {
                 taskSummaryChildren.push(new docx.Paragraph({ text: project.title, heading: docx.HeadingLevel.HEADING_2, spacing: { before: 400, after: 200 } }));
-                const assignedUsersWithTasks = Object.values(project.groupedTasks).filter(g => g.tasks.length > 0);
+                // FIX: Cast `g` to the correct type to resolve "Property 'tasks' does not exist on type 'unknown'".
+                const assignedUsersWithTasks = Object.values(project.groupedTasks).filter(g => (g as { tasks: Task[] }).tasks.length > 0);
                  assignedUsersWithTasks.forEach(({ user, tasks }) => {
                     taskSummaryChildren.push(new docx.Paragraph({ text: user.name, heading: docx.HeadingLevel.HEADING_3, spacing: { before: 300, after: 150 } }));
                     renderTasksForDocx(tasks, taskSummaryChildren);
@@ -332,7 +334,8 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
             });
         } else { 
             taskSummaryChildren.push(new docx.Paragraph({ text: currentProject.title, heading: docx.HeadingLevel.HEADING_2, spacing: { before: 400, after: 200 } }));
-            const assignedUsersWithTasks = Object.values(currentProject.groupedTasks).filter(g => g.tasks.length > 0);
+            // FIX: Cast `g` to the correct type to resolve "Property 'tasks' does not exist on type 'unknown'".
+            const assignedUsersWithTasks = Object.values(currentProject.groupedTasks).filter(g => (g as { tasks: Task[] }).tasks.length > 0);
             assignedUsersWithTasks.forEach(({ user, tasks }) => {
                 taskSummaryChildren.push(new docx.Paragraph({ text: user.name, heading: docx.HeadingLevel.HEADING_3, spacing: { before: 300, after: 150 } }));
                 renderTasksForDocx(tasks, taskSummaryChildren);
