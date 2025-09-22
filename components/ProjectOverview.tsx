@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { User, Task, GroupedTasks, Settings } from '../types';
 import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2, CalendarDays } from 'lucide-react';
@@ -255,12 +256,14 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string; 
 
 
 const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassignedTasks, projectTitle, viewScope, totalCost, users, settings, onAddBulkTaskUpdates }) => {
-  const allTasks = [...Object.values(groupedTasks).flatMap(g => g.tasks), ...unassignedTasks];
+  // FIX: Cast `g` to the correct type to resolve "Property 'tasks' does not exist on type 'unknown'".
+  const allTasks = [...Object.values(groupedTasks).flatMap(g => (g as { tasks: Task[] }).tasks), ...unassignedTasks];
   const totalTasks = allTasks.length;
   const completedTasks = allTasks.filter(t => t.completed).length;
   const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
-  const assignedUsersWithTasks = Object.values(groupedTasks).filter(group => group.tasks.length > 0);
+  // FIX: Cast `group` to the correct type to resolve "Property 'tasks' does not exist on type 'unknown'".
+  const assignedUsersWithTasks = Object.values(groupedTasks).filter(group => (group as { tasks: Task[] }).tasks.length > 0);
   
   const unassignedCost = unassignedTasks.reduce((sum, task) => sum + (task.cost ?? 0), 0);
 

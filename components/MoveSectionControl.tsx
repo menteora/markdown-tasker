@@ -6,9 +6,10 @@ interface MoveSectionControlProps {
     allSections: Section[];
     currentSectionIndex: number;
     onMoveSection: (destinationLine: number) => void;
+    viewScope: 'single' | 'all';
 }
 
-const MoveSectionControl: React.FC<MoveSectionControlProps> = ({ allSections, currentSectionIndex, onMoveSection }) => {
+const MoveSectionControl: React.FC<MoveSectionControlProps> = ({ allSections, currentSectionIndex, onMoveSection, viewScope }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -29,6 +30,8 @@ const MoveSectionControl: React.FC<MoveSectionControlProps> = ({ allSections, cu
 
     const currentSection = allSections[currentSectionIndex];
     if (!currentSection) return null;
+
+    const topText = viewScope === 'single' ? 'Top of project' : 'Top of file';
 
     return (
         <div className="relative" ref={dropdownRef}>
@@ -55,7 +58,7 @@ const MoveSectionControl: React.FC<MoveSectionControlProps> = ({ allSections, cu
                                 role="menuitem"
                             >
                                 <ArrowUpToLine className="w-4 h-4 mr-2 flex-shrink-0" />
-                                Top of file
+                                {topText}
                             </button>
                         )}
                         
