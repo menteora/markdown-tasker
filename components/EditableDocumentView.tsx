@@ -4,22 +4,18 @@ import React, { useMemo, useCallback } from 'react';
 import { useSectionParser } from '../hooks/useSectionParser';
 import type { User, Project, Heading } from '../types';
 import EditableSection from './EditableSection';
+import { useProject } from '../contexts/ProjectContext';
 
 interface EditableDocumentViewProps {
   markdown: string;
-  users: User[];
-  onSectionUpdate: (startLine: number, endLine: number, newContent: string) => void;
-  onToggle: (lineIndex: number, isCompleted: boolean) => void;
-  onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
-  onMoveSection: (sectionToMove: {startLine: number, endLine: number}, destinationLine: number) => void;
-  onDuplicateSection: (sectionToDuplicate: {startLine: number, endLine: number}, destinationLine: number) => void;
   projects: Project[];
   viewScope: 'single' | 'all';
   currentProjectIndex: number;
 }
 
 const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
-  const { markdown, onSectionUpdate, onMoveSection, onDuplicateSection, projects, viewScope, currentProjectIndex, ...handlers } = props;
+  const { markdown, projects, viewScope, currentProjectIndex } = props;
+  const { users, updateSection, moveSection, duplicateSection, toggleTask, updateTaskBlock } = useProject();
   const sections = useSectionParser(markdown);
 
   const projectStartLine = useMemo(() => {
@@ -35,8 +31,8 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
           endLine: sectionToMove.endLine + projectStartLine,
       };
       const absoluteDestinationLine = destinationLine > 0 ? destinationLine + projectStartLine : 0;
-      onMoveSection(absoluteSectionToMove, absoluteDestinationLine);
-  }, [projectStartLine, onMoveSection]);
+      moveSection(absoluteSectionToMove, absoluteDestinationLine);
+  }, [projectStartLine, moveSection]);
 
   const handleDuplicateSectionWithOffset = useCallback((sectionToDuplicate: {startLine: number, endLine: number}, destinationLine: number) => {
       const absoluteSectionToDuplicate = {
@@ -44,8 +40,28 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
           endLine: sectionToDuplicate.endLine + projectStartLine,
       };
       const absoluteDestinationLine = destinationLine > 0 ? destinationLine + projectStartLine : 0;
-      onDuplicateSection(absoluteSectionToDuplicate, absoluteDestinationLine);
-  }, [projectStartLine, onDuplicateSection]);
+      duplicateSection(absoluteSectionToDuplicate, absoluteDestinationLine);
+  }, [projectStartLine, duplicateSection]);
+
+  const handleUpdateSection = useCallback((startLine: number, endLine: number, newContent: string) => {
+    const absoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex]) ? projects[currentProjectIndex].startLine + startLine : startLine;
+    const absoluteEndLine = (viewScope === 'single' && projects[currentProjectIndex]) ? projects[currentProjectIndex].startLine + endLine : endLine;
+    updateSection(absoluteStartLine, absoluteEndLine, newContent);
+  }, [viewScope, currentProjectIndex, projects, updateSection]);
+
+  const handleToggleTask = useCallback((lineIndex: number, isCompleted: boolean) => {
+    const absoluteLineIndex = (viewScope === 'single' && projects[currentProjectIndex])
+      ? projects[currentProjectIndex].startLine + lineIndex
+      : lineIndex;
+    toggleTask(absoluteLineIndex, isCompleted);
+  }, [viewScope, currentProjectIndex, projects, toggleTask]);
+
+  const handleUpdateTaskBlock = useCallback((startLine: number, lineCount: number, newContent: string) => {
+    const absoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex])
+      ? projects[currentProjectIndex].startLine + startLine
+      : startLine;
+    updateTaskBlock(absoluteStartLine, lineCount, newContent);
+  }, [viewScope, currentProjectIndex, projects, updateTaskBlock]);
 
 
   return (
@@ -65,12 +81,13 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
                             section={section}
                             sectionIndex={index}
                             allSections={sections}
-                            onSectionUpdate={onSectionUpdate}
+                            onSectionUpdate={handleUpdateSection}
                             onMoveSection={handleMoveSectionWithOffset}
                             onDuplicateSection={handleDuplicateSectionWithOffset}
+                            onToggle={handleToggleTask}
+                            onUpdateTaskBlock={handleUpdateTaskBlock}
                             tocHeadings={tocHeadings}
-                            {...handlers}
-                            users={props.users}
+                            users={users}
                             viewScope={viewScope}
                             projectStartLine={projectStartLine}
                         />

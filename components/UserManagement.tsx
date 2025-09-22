@@ -1,12 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { User } from '../types';
-
-interface UserManagementProps {
-  users: User[];
-  onAddUser: (newUser: Omit<User, 'avatarUrl'>) => void;
-  onUpdateUser: (oldAlias: string, user: User) => void;
-  onDeleteUser: (userAlias: string) => void;
-}
+import { useProject } from '../contexts/ProjectContext';
 
 const sanitizeAlias = (alias: string): string => {
     return alias.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
@@ -98,7 +92,8 @@ const UserRow: React.FC<{
 };
 
 
-const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpdateUser, onDeleteUser }) => {
+const UserManagement: React.FC = () => {
+    const { users, addUser, updateUser, deleteUser } = useProject();
     const [newName, setNewName] = useState('');
     const [newEmail, setNewEmail] = useState('');
     const [newAlias, setNewAlias] = useState('');
@@ -121,7 +116,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
         e.preventDefault();
         const finalAlias = sanitizeAlias(newAlias.trim());
         if (newName.trim() && newEmail.trim() && finalAlias) {
-            onAddUser({ name: newName.trim(), email: newEmail.trim(), alias: finalAlias });
+            addUser({ name: newName.trim(), email: newEmail.trim(), alias: finalAlias });
             setNewName('');
             setNewEmail('');
             setNewAlias('');
@@ -185,7 +180,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
                     <h2 className="text-2xl font-bold mb-4 border-b border-slate-700 pb-2">Existing Assignees</h2>
                     {users.length > 0 ? (
                         users.map(user => (
-                            <UserRow key={user.alias} user={user} onUpdate={onUpdateUser} onDelete={onDeleteUser} />
+                            <UserRow key={user.alias} user={user} onUpdate={updateUser} onDelete={deleteUser} />
                         ))
                     ) : (
                         <p className="text-slate-400 text-center py-4">No assignees found. Add one using the form above.</p>

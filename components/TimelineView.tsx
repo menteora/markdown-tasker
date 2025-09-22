@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
 import type { User, Task } from '../types';
 import { CheckCircle2, Circle, AlertTriangle, Calendar, Clock, Inbox, ArrowRight } from 'lucide-react';
+import { useProject } from '../contexts/ProjectContext';
 
 type ViewScope = 'single' | 'all';
 
 interface TimelineViewProps {
   tasks: Task[];
-  users: User[];
   viewScope: ViewScope;
 }
 
@@ -50,7 +50,8 @@ const TimelineTaskItem: React.FC<{ task: Task; user: User | null; viewScope: Vie
   );
 };
 
-const TimelineSection: React.FC<{ title: string; icon: React.ReactNode; tasks: Task[]; users: User[]; viewScope: ViewScope; }> = ({ title, icon, tasks, users, viewScope }) => {
+const TimelineSection: React.FC<{ title: string; icon: React.ReactNode; tasks: Task[]; viewScope: ViewScope; }> = ({ title, icon, tasks, viewScope }) => {
+    const { users } = useProject();
     const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
     if (tasks.length === 0) return null;
     return (
@@ -74,7 +75,7 @@ const TimelineSection: React.FC<{ title: string; icon: React.ReactNode; tasks: T
     );
 };
 
-const TimelineView: React.FC<TimelineViewProps> = ({ tasks, users, viewScope }) => {
+const TimelineView: React.FC<TimelineViewProps> = ({ tasks, viewScope }) => {
   const groupedTasks = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -130,35 +131,30 @@ const TimelineView: React.FC<TimelineViewProps> = ({ tasks, users, viewScope }) 
               title="Overdue"
               icon={<AlertTriangle className="w-5 h-5 text-red-400" />}
               tasks={groupedTasks.overdue}
-              users={users}
               viewScope={viewScope}
           />
            <TimelineSection
               title="Due Today"
               icon={<Calendar className="w-5 h-5 text-yellow-400" />}
               tasks={groupedTasks.dueToday}
-              users={users}
               viewScope={viewScope}
           />
            <TimelineSection
               title="This Week"
               icon={<ArrowRight className="w-5 h-5 text-blue-400" />}
               tasks={groupedTasks.thisWeek}
-              users={users}
               viewScope={viewScope}
           />
           <TimelineSection
               title="This Month"
               icon={<Clock className="w-5 h-5 text-indigo-400" />}
               tasks={groupedTasks.thisMonth}
-              users={users}
               viewScope={viewScope}
           />
           <TimelineSection
               title="Later"
               icon={<Inbox className="w-5 h-5 text-slate-400" />}
               tasks={groupedTasks.later}
-              users={users}
               viewScope={viewScope}
           />
       </div>

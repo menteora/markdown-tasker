@@ -6,20 +6,17 @@ import * as docx from 'docx';
 import saveAs from 'file-saver';
 import type { Task, User, Project, Settings } from '../types';
 import DailyReportModal from './DailyReportModal';
+import { useProject } from '../contexts/ProjectContext';
 
 type ViewScope = 'single' | 'all';
 
 interface ProjectActionsProps {
-    markdown: string;
-    projects: Project[];
-    users: User[];
-    onExportProject: () => void;
-    onImportProject: (file: File) => void;
     viewScope: ViewScope;
     currentProject: Project;
 }
 
-const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, users, onExportProject, onImportProject, viewScope, currentProject }) => {
+const ProjectActions: React.FC<ProjectActionsProps> = ({ viewScope, currentProject }) => {
+    const { markdown, projects, users, settings, importProject } = useProject();
     const [isOpen, setIsOpen] = useState(false);
     const [isDailyReportModalOpen, setIsDailyReportModalOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -33,6 +30,14 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const handleExportProject = useCallback(() => {
+        const projectData = { users, markdown, settings };
+        const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+        const filename = projects.length > 1 ? 'Multi-Project.mdtasker' : `${currentProject.title.replace(/\s/g, '_')}.mdtasker`;
+        saveAs(blob, filename);
+        setIsOpen(false);
+    }, [users, markdown, settings, projects, currentProject.title]);
     
     const createInlinesFromMarkdown = (text: string, options: any = {}): (docx.TextRun | docx.ExternalHyperlink)[] => {
         const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);
@@ -139,8 +144,8 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
         projectsToExport.forEach((project, index) => {
             const allTasksInProject = [
                 ...project.unassignedTasks,
-                // FIX: Cast `g` to the correct type to resolve "Property 'tasks' does not exist on type 'unknown'".
-                ...Object.values(project.groupedTasks).flatMap(g => (g as { tasks: Task[] }).tasks)
+                // FIX: Add explicit type to lambda parameter to fix 'tasks' property does not exist on type 'unknown' error.
+                ...Object.values(project.groupedTasks).flatMap((g: { user: User; tasks: Task[] }) => g.tasks)
             ];
 
             const tasksWithUpdatesOnDate = allTasksInProject.map(task => {
@@ -320,8 +325,8 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
         if (viewScope === 'all') {
             projects.forEach(project => {
                 taskSummaryChildren.push(new docx.Paragraph({ text: project.title, heading: docx.HeadingLevel.HEADING_2, spacing: { before: 400, after: 200 } }));
-                // FIX: Cast `g` to the correct type to resolve "Property 'tasks' does not exist on type 'unknown'".
-                const assignedUsersWithTasks = Object.values(project.groupedTasks).filter(g => (g as { tasks: Task[] }).tasks.length > 0);
+                // FIX: Add explicit type to lambda parameter to fix 'tasks' property does not exist on type 'unknown' error.
+                const assignedUsersWithTasks = Object.values(project.groupedTasks).filter((g: { user: User; tasks: Task[] }) => g.tasks.length > 0);
                  assignedUsersWithTasks.forEach(({ user, tasks }) => {
                     taskSummaryChildren.push(new docx.Paragraph({ text: user.name, heading: docx.HeadingLevel.HEADING_3, spacing: { before: 300, after: 150 } }));
                     renderTasksForDocx(tasks, taskSummaryChildren);
@@ -334,8 +339,8 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
             });
         } else { 
             taskSummaryChildren.push(new docx.Paragraph({ text: currentProject.title, heading: docx.HeadingLevel.HEADING_2, spacing: { before: 400, after: 200 } }));
-            // FIX: Cast `g` to the correct type to resolve "Property 'tasks' does not exist on type 'unknown'".
-            const assignedUsersWithTasks = Object.values(currentProject.groupedTasks).filter(g => (g as { tasks: Task[] }).tasks.length > 0);
+            // FIX: Add explicit type to lambda parameter to fix 'tasks' property does not exist on type 'unknown' error.
+            const assignedUsersWithTasks = Object.values(currentProject.groupedTasks).filter((g: { user: User; tasks: Task[] }) => g.tasks.length > 0);
             assignedUsersWithTasks.forEach(({ user, tasks }) => {
                 taskSummaryChildren.push(new docx.Paragraph({ text: user.name, heading: docx.HeadingLevel.HEADING_3, spacing: { before: 300, after: 150 } }));
                 renderTasksForDocx(tasks, taskSummaryChildren);
@@ -367,7 +372,7 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
-            onImportProject(file);
+            importProject(file);
         }
         if (event.target) event.target.value = '';
     };
@@ -390,7 +395,7 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ markdown, projects, use
                          <button onClick={handleImportClick} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-200" role="menuitem">
                             <Upload className="w-4 h-4" /><span>Import Project (.mdtasker)</span>
                         </button>
-                        <button onClick={() => { onExportProject(); setIsOpen(false); }} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-200" role="menuitem">
+                        <button onClick={handleExportProject} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-200" role="menuitem">
                             <Download className="w-4 h-4" /><span>Export Project (.mdtasker)</span>
                         </button>
                         
