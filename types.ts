@@ -59,4 +59,19 @@ export interface Settings {
   emailSignature: string;
   reminderMessage: string;
   ccAlias?: string | null;
+  supabaseUrl?: string | null;
+  supabaseAnonKey?: string | null;
+  supabaseEmail?: string | null;
+}
+
+export interface BackupRecord {
+    id: string;
+    created_at: string;
+    client_name?: string;
+}
+
+export interface FullProjectState {
+    markdown: string;
+    users: User[];
+    settings: Omit<Settings, 'supabaseUrl' | 'supabaseAnonKey' | 'supabaseEmail'>;
 }

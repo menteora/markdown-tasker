@@ -11,6 +11,9 @@ const DEFAULT_SETTINGS: Settings = {
   emailSignature: '{senderName}',
   reminderMessage: 'Reminder sent.',
   ccAlias: null,
+  supabaseUrl: null,
+  supabaseAnonKey: null,
+  supabaseEmail: null,
 };
 
 export const useSettings = (): [Settings, (newSettings: Partial<Settings>) => void] => {

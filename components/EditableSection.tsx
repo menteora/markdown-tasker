@@ -4,13 +4,12 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import type { User, TaskUpdate, Task, Heading } from '../types';
 import { Section } from '../hooks/useSectionParser';
 import Toolbar from './Toolbar';
-import { Pencil, Save, X, CheckCircle2, CalendarDays, ChevronRight } from 'lucide-react';
+import { Pencil, Save, X, CheckCircle2, CalendarDays, ChevronRight, ChevronDown } from 'lucide-react';
 import InputModal from './InputModal';
 import DatePickerModal from './DatePickerModal';
 import MoveSectionControl from './MoveSectionControl';
 import DuplicateSectionControl from './DuplicateSectionControl';
 import TableOfContents from './TableOfContents';
-
 
 // Autocomplete Component for @ mentions
 interface MentionAutocompleteProps {
@@ -458,6 +457,7 @@ interface EditableSectionProps {
 
 const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, tocHeadings, ...props }) => {
   const [isEditing, setIsEditing] = useState(() => !section.content.trim());
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [editedContent, setEditedContent] = useState(section.content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mirrorRef = useRef<HTMLDivElement>(null);
@@ -504,6 +504,11 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
     }
   }, [mentionQuery]);
 
+  const handleToggleCollapse = useCallback(() => {
+    if (section.heading) {
+        setIsCollapsed(prev => !prev);
+    }
+  }, [section.heading]);
 
   const handleSave = () => {
     onSectionUpdate(section.startLine, section.endLine, editedContent);
@@ -781,7 +786,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
 
   }, [editedContent]);
 
-  const renderPreviewContent = (tocHeadingsForSlugs?: Heading[]) => {
+  const renderPreviewContent = useCallback((tocHeadingsForSlugs?: Heading[]) => {
     const lines = section.content.split('\n');
     const elements: React.ReactNode[] = [];
     let i = 0;
@@ -790,7 +795,40 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
       const absoluteLineIndex = section.startLine + i;
 
       const hMatch = line.match(/^(#+) (.*)/);
-      if (hMatch) {
+      if (hMatch && i === 0 && section.heading) { // This is the main section heading.
+          const level = hMatch[1].length;
+          const text = hMatch[2].trim();
+          const headingData = tocHeadingsForSlugs?.find(h => h.line === absoluteLineIndex);
+          
+          let headingClassName: string;
+          let buttonClassName = "font-bold flex items-center w-full text-left transition-colors hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded p-1 -ml-1";
+          
+          switch(level) {
+              case 1: 
+                  headingClassName = "text-3xl mt-6 mb-3 pb-2 border-b border-slate-700 scroll-mt-20";
+                  break;
+              case 2:
+                  headingClassName = "text-2xl mt-5 mb-2 scroll-mt-20";
+                  break;
+              case 3:
+              default:
+                  headingClassName = "text-xl mt-4 mb-1 scroll-mt-20";
+                  break;
+          }
+
+          const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
+
+          elements.push(
+              <HeadingTag key={i} id={headingData?.slug} className={headingClassName}>
+                  <button className={buttonClassName} onClick={handleToggleCollapse} aria-expanded={!isCollapsed} aria-controls={`section-content-${section.startLine}`}>
+                      {isCollapsed ? <ChevronRight className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" /> : <ChevronDown className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" />}
+                      <span className="flex-grow"><InlineMarkdown text={text} /></span>
+                  </button>
+              </HeadingTag>
+          );
+          i++;
+          continue;
+      } else if (hMatch) {
           const level = hMatch[1].length;
           const text = hMatch[2].trim();
           const headingData = tocHeadingsForSlugs?.find(h => h.line === absoluteLineIndex);
@@ -845,7 +883,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
       i++;
     }
     return elements;
-  }
+  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, handleToggleCollapse, isCollapsed]);
 
   if (isEditing) {
     return (
@@ -904,6 +942,11 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
       </>
     );
   }
+  
+  const renderedNodes = useMemo(() => renderPreviewContent(tocHeadings), [renderPreviewContent, tocHeadings]);
+      
+  const headingNode = section.heading ? renderedNodes[0] : null;
+  const contentNodes = section.heading ? renderedNodes.slice(1) : renderedNodes;
 
   return (
     <div className="relative group bg-slate-800/30 hover:bg-slate-800/50 rounded-lg transition-colors duration-200">
@@ -930,7 +973,10 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
       </button>
       </div>
       <div className="p-4 prose-invert pb-8">
-        {renderPreviewContent(tocHeadings)}
+        {headingNode}
+        <div id={`section-content-${section.startLine}`} role="region">
+          {(!isCollapsed || !section.heading) && contentNodes}
+        </div>
       </div>
     </div>
   );

@@ -1,10 +1,9 @@
 
-
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import UserManagement from './components/UserManagement';
 import ProjectOverview from './components/ProjectOverview';
 import ProjectActions from './components/ProjectActions';
-import type { User, Project, GroupedTasks, Task, Settings } from './types';
+import type { User, Project, GroupedTasks, Task, Settings, FullProjectState, BackupRecord } from './types';
 import { useMarkdownParser } from './hooks/useMarkdownParser';
 import { INITIAL_USERS } from './constants';
 import saveAs from 'file-saver';
@@ -14,6 +13,12 @@ import SettingsModal from './components/SettingsModal';
 import EditableDocumentView from './components/EditableDocumentView';
 import FullDocumentEditor from './components/FullDocumentEditor';
 import TimelineView from './components/TimelineView';
+import ConfirmationModal from './components/ConfirmationModal';
+import CloudActions from './components/CloudActions';
+import SupabaseAuthModal from './components/SupabaseAuthModal';
+import RestoreBackupModal from './components/RestoreBackupModal';
+import { getSupabaseClient, signIn, signOut, getSession, backupProject, getBackups, getBackupData } from './lib/supabaseClient';
+
 
 const initialMarkdown = `# Project Titan Launch 🚀
 
@@ -160,9 +165,23 @@ const App: React.FC = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isFullEditMode, setIsFullEditMode] = useState(false);
   const [fullEditContent, setFullEditContent] = useState('');
+  const [restoreConfirmation, setRestoreConfirmation] = useState<{ isOpen: boolean; data: FullProjectState | null }>({ isOpen: false, data: null });
+  
+  // Cloud state
+  const [isLoadingCloud, setIsLoadingCloud] = useState(false);
+  const [isSupabaseAuthenticated, setIsSupabaseAuthenticated] = useState(false);
+  const [supabaseAuthRequest, setSupabaseAuthRequest] = useState<{
+      action: 'backup' | 'restore';
+      title: string;
+      onConfirm: (password: string) => void;
+  } | null>(null);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [cloudBackups, setCloudBackups] = useState<BackupRecord[]>([]);
 
   const projects = useMarkdownParser(markdown, users);
   
+  const isSupabaseConfigured = !!(settings.supabaseUrl && settings.supabaseAnonKey && settings.supabaseEmail);
+
   useEffect(() => {
     try {
         const projectState = { markdown, users };
@@ -182,6 +201,27 @@ const App: React.FC = () => {
   useEffect(() => {
     setIsFullEditMode(false);
   }, [viewScope]);
+  
+  useEffect(() => {
+      if (isSupabaseConfigured) {
+          const client = getSupabaseClient(settings.supabaseUrl!, settings.supabaseAnonKey!);
+          
+          getSession(client).then(session => {
+              setIsSupabaseAuthenticated(!!session);
+          });
+
+          const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+              setIsSupabaseAuthenticated(!!session);
+          });
+
+          return () => {
+              subscription.unsubscribe();
+          };
+      } else {
+          setIsSupabaseAuthenticated(false);
+      }
+  }, [isSupabaseConfigured, settings.supabaseUrl, settings.supabaseAnonKey]);
+
 
   const displayMarkdown = useMemo(() => {
     if (viewScope === 'single' && currentProjectIndex < projects.length) {
@@ -443,6 +483,152 @@ const App: React.FC = () => {
     reader.readAsText(file);
   }, [saveSettings]);
 
+  const handleRequestLocalRestore = useCallback((data: FullProjectState) => {
+    setRestoreConfirmation({ isOpen: true, data });
+  }, []);
+
+  const handleConfirmRestore = useCallback(() => {
+    if (!restoreConfirmation.data) return;
+    
+    const { markdown: newMarkdown, users: newUsers, settings: newSettings } = restoreConfirmation.data;
+    
+    setMarkdown(newMarkdown);
+    setUsers(newUsers);
+    saveSettings(newSettings);
+    
+    setRestoreConfirmation({ isOpen: false, data: null });
+    alert('Project restored successfully from cloud backup!');
+  }, [restoreConfirmation.data, saveSettings]);
+  
+  // --- Cloud Actions ---
+  
+  const performBackup = async () => {
+      if (!isSupabaseConfigured) return;
+      setIsLoadingCloud(true);
+      try {
+          const client = getSupabaseClient(settings.supabaseUrl!, settings.supabaseAnonKey!);
+          const { supabaseUrl, supabaseAnonKey, supabaseEmail, ...settingsToBackup } = settings;
+          const projectState: FullProjectState = { markdown, users, settings: settingsToBackup };
+          const result = await backupProject(client, projectState);
+          if (result) {
+              alert(`Backup successful!\nTimestamp: ${new Date(result.created_at).toLocaleString()}`);
+          }
+      } catch (error: any) {
+          console.error("Backup failed:", error);
+          alert(`Backup failed: ${error.message || 'Unknown error'}`);
+      } finally {
+          setIsLoadingCloud(false);
+      }
+    };
+
+  const fetchAndShowRestoreModal = async () => {
+    if (!isSupabaseConfigured) return;
+    setIsLoadingCloud(true);
+    try {
+        const client = getSupabaseClient(settings.supabaseUrl!, settings.supabaseAnonKey!);
+        const fetchedBackups = await getBackups(client);
+        if (fetchedBackups) {
+            setCloudBackups(fetchedBackups);
+            setIsRestoreModalOpen(true);
+        }
+    } catch (error: any) {
+        console.error("Fetch backups failed:", error);
+        alert(`Failed to fetch backups: ${error.message || 'Unknown error'}`);
+    } finally {
+        setIsLoadingCloud(false);
+    }
+  };
+  
+  const performRestore = async (backupId: string) => {
+    if (!isSupabaseConfigured) return;
+    setIsRestoreModalOpen(false);
+    setIsLoadingCloud(true);
+    try {
+        const client = getSupabaseClient(settings.supabaseUrl!, settings.supabaseAnonKey!);
+        const backupData = await getBackupData(client, backupId);
+        if (backupData) {
+            handleRequestLocalRestore(backupData);
+        }
+    } catch (error: any) {
+         console.error("Restore failed:", error);
+         alert(`Failed to restore: ${error.message || 'Unknown error'}`);
+    } finally {
+        setIsLoadingCloud(false);
+    }
+  };
+  
+  const handleRequestBackup = async () => {
+    if (isSupabaseAuthenticated) {
+        await performBackup();
+    } else {
+        setSupabaseAuthRequest({
+            action: 'backup',
+            title: 'Authenticate to Backup',
+            onConfirm: async (password) => {
+                setSupabaseAuthRequest(null);
+                setIsLoadingCloud(true);
+                const client = getSupabaseClient(settings.supabaseUrl!, settings.supabaseAnonKey!);
+                try {
+                    const user = await signIn(client, settings.supabaseEmail!, password);
+                    if (user) {
+                        await performBackup();
+                    } else {
+                       alert("Login failed.");
+                       setIsLoadingCloud(false);
+                    }
+                } catch (error) {
+                    alert("Login failed.");
+                    setIsLoadingCloud(false);
+                }
+            }
+        });
+    }
+  };
+
+  const handleRequestRestore = async () => {
+      if (isSupabaseAuthenticated) {
+          await fetchAndShowRestoreModal();
+      } else {
+          setSupabaseAuthRequest({
+              action: 'restore',
+              title: 'Authenticate to Restore',
+              onConfirm: async (password) => {
+                  setSupabaseAuthRequest(null);
+                  setIsLoadingCloud(true);
+                  const client = getSupabaseClient(settings.supabaseUrl!, settings.supabaseAnonKey!);
+                  try {
+                      const user = await signIn(client, settings.supabaseEmail!, password);
+                      if (user) {
+                          await fetchAndShowRestoreModal();
+                      } else {
+                         alert("Login failed.");
+                         setIsLoadingCloud(false);
+                      }
+                  } catch (error) {
+                      alert("Login failed.");
+                      setIsLoadingCloud(false);
+                  }
+              }
+          });
+      }
+  };
+
+  const handleSignOut = async () => {
+    if (!isSupabaseConfigured) return;
+    setIsLoadingCloud(true);
+    try {
+        const client = getSupabaseClient(settings.supabaseUrl!, settings.supabaseAnonKey!);
+        await signOut(client);
+        alert("Signed out successfully.");
+    } catch (error: any) {
+        console.error("Sign out failed:", error);
+        alert(`Sign out failed: ${error.message || 'Unknown error'}`);
+    } finally {
+        setIsLoadingCloud(false);
+    }
+  };
+
+
   const getHeaderDescription = () => {
     if (isFullEditMode) {
         return `Editing ${viewScope === 'all' ? 'the entire file' : `project: ${currentProject.title}`}.`;
@@ -591,6 +777,14 @@ const App: React.FC = () => {
           >
               <SettingsIcon className="w-5 h-5" />
           </button>
+          <CloudActions
+            isConfigured={isSupabaseConfigured}
+            isLoading={isLoadingCloud}
+            onBackup={handleRequestBackup}
+            onRestore={handleRequestRestore}
+            isAuthenticated={isSupabaseAuthenticated}
+            onSignOut={handleSignOut}
+          />
           <ProjectActions
               markdown={markdown}
               projects={projects}
@@ -614,6 +808,30 @@ const App: React.FC = () => {
         settings={settings}
         onSave={saveSettings}
         users={users}
+      />
+       <ConfirmationModal
+          isOpen={restoreConfirmation.isOpen}
+          onClose={() => setRestoreConfirmation({ isOpen: false, data: null })}
+          onConfirm={handleConfirmRestore}
+          title="Confirm Restore"
+          confirmText="Yes, Overwrite Local Project"
+      >
+          <p>Are you sure you want to restore this backup?</p>
+          <p className="text-sm text-yellow-400 mt-2">This will overwrite your current local project data. This action cannot be undone.</p>
+      </ConfirmationModal>
+      {supabaseAuthRequest && (
+        <SupabaseAuthModal
+            isOpen={!!supabaseAuthRequest}
+            onClose={() => setSupabaseAuthRequest(null)}
+            onConfirm={supabaseAuthRequest.onConfirm}
+            title={supabaseAuthRequest.title}
+        />
+      )}
+      <RestoreBackupModal
+          isOpen={isRestoreModalOpen}
+          onClose={() => setIsRestoreModalOpen(false)}
+          backups={cloudBackups}
+          onSelectBackup={performRestore}
       />
     </div>
   );
