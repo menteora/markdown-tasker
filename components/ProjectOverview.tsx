@@ -1,8 +1,10 @@
 
+
 import React, { useState, useMemo } from 'react';
 import type { User, Task, GroupedTasks, Settings } from '../types';
 import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2, CalendarDays } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
+import { useProject } from '../contexts/ProjectContext';
 
 const formatMarkdownForEmail = (text: string): string => {
   const linkRegex = /\[(.*?)\]\((.*?)\)/g;
@@ -40,9 +42,6 @@ interface ProjectOverviewProps {
   projectTitle: string;
   viewScope: ViewScope;
   totalCost: number;
-  users: User[];
-  settings: Settings;
-  onAddBulkTaskUpdates: (taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => void;
 }
 
 const TaskItem: React.FC<{ task: Task; viewScope: ViewScope }> = ({ task, viewScope }) => {
@@ -122,10 +121,8 @@ const UserTaskCard: React.FC<{
     tasks: Task[]; 
     projectTitle: string; 
     viewScope: ViewScope;
-    users: User[];
-    settings: Settings;
-    onAddBulkTaskUpdates: (taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => void;
-}> = ({ user, tasks, projectTitle, viewScope, users, settings, onAddBulkTaskUpdates }) => {
+}> = ({ user, tasks, projectTitle, viewScope }) => {
+  const { users, settings, addBulkTaskUpdates } = useProject();
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const completedTasks = tasks.filter(t => t.completed).length;
   const totalTasks = tasks.length;
@@ -180,7 +177,7 @@ const UserTaskCard: React.FC<{
   const handleConfirmSend = () => {
     const incompleteTaskIndexes = incompleteTasks.map(t => t.lineIndex);
     const updateText = settings.reminderMessage;
-    onAddBulkTaskUpdates(incompleteTaskIndexes, updateText, settings.senderAlias);
+    addBulkTaskUpdates(incompleteTaskIndexes, updateText, settings.senderAlias);
     generateEmail();
     setIsConfirmationOpen(false);
   };
@@ -255,16 +252,14 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string; 
 );
 
 
-const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassignedTasks, projectTitle, viewScope, totalCost, users, settings, onAddBulkTaskUpdates }) => {
-  // FIX: Cast `g` to the correct type to resolve "Property 'tasks' does not exist on type 'unknown'".
-  const allTasks = [...Object.values(groupedTasks).flatMap(g => (g as { tasks: Task[] }).tasks), ...unassignedTasks];
+const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassignedTasks, projectTitle, viewScope, totalCost }) => {
+  // FIX: Add explicit type to lambda parameter to fix 'tasks' property does not exist on type 'unknown' error.
+  const allTasks = [...Object.values(groupedTasks).flatMap((g: { user: User; tasks: Task[] }) => g.tasks), ...unassignedTasks];
   const totalTasks = allTasks.length;
   const completedTasks = allTasks.filter(t => t.completed).length;
   const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-
-  // FIX: Cast `group` to the correct type to resolve "Property 'tasks' does not exist on type 'unknown'".
-  const assignedUsersWithTasks = Object.values(groupedTasks).filter(group => (group as { tasks: Task[] }).tasks.length > 0);
-  
+  // FIX: Add explicit type to lambda parameter to fix 'tasks' property does not exist on type 'unknown' error.
+  const assignedUsersWithTasks = Object.values(groupedTasks).filter((group: { user: User; tasks: Task[] }) => group.tasks.length > 0);
   const unassignedCost = unassignedTasks.reduce((sum, task) => sum + (task.cost ?? 0), 0);
 
   return (
@@ -277,7 +272,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassig
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {assignedUsersWithTasks.map(({ user, tasks }) => (
-          <UserTaskCard key={user.alias} user={user} tasks={tasks} projectTitle={projectTitle} viewScope={viewScope} users={users} settings={settings} onAddBulkTaskUpdates={onAddBulkTaskUpdates} />
+          <UserTaskCard key={user.alias} user={user} tasks={tasks} projectTitle={projectTitle} viewScope={viewScope} />
         ))}
 
         {unassignedTasks.length > 0 && (

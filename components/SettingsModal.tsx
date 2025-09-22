@@ -3,16 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, HelpCircle } from 'lucide-react';
 import type { Settings, User } from '../types';
 import SupabaseHelpModal from './SupabaseHelpModal';
+import { useProject } from '../contexts/ProjectContext';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  settings: Settings;
-  onSave: (newSettings: Partial<Settings>) => void;
-  users: User[];
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, users }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+  const { settings, saveSettings, users } = useProject();
   const [currentSettings, setCurrentSettings] = useState(settings);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   
@@ -32,7 +31,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
   };
 
   const handleSave = () => {
-    onSave(currentSettings);
+    saveSettings(currentSettings);
     alert("Settings saved!");
     onClose();
   };

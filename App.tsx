@@ -4,11 +4,7 @@ import UserManagement from './components/UserManagement';
 import ProjectOverview from './components/ProjectOverview';
 import ProjectActions from './components/ProjectActions';
 import type { User, Project, GroupedTasks, Task, Settings, FullProjectState, BackupRecord } from './types';
-import { useMarkdownParser } from './hooks/useMarkdownParser';
-import { INITIAL_USERS } from './constants';
-import saveAs from 'file-saver';
 import { ChevronsUpDown, Settings as SettingsIcon, Pencil } from 'lucide-react';
-import { useSettings } from './hooks/useSettings';
 import SettingsModal from './components/SettingsModal';
 import EditableDocumentView from './components/EditableDocumentView';
 import FullDocumentEditor from './components/FullDocumentEditor';
@@ -18,62 +14,11 @@ import CloudActions from './components/CloudActions';
 import SupabaseAuthModal from './components/SupabaseAuthModal';
 import RestoreBackupModal from './components/RestoreBackupModal';
 import { getSupabaseClient, signIn, signOut, getSession, backupProject, getBackups, getBackupData } from './lib/supabaseClient';
+import { useProject } from './contexts/ProjectContext';
 
-
-const initialMarkdown = `# Project Titan Launch 🚀
-
-This is a self-contained project file. Manage assignees in the "Manage Assignees" tab.
-Use H1 headings (e.g., '# My Project') to create separate projects within this file.
-
-## Phase 1: Design
-
-- [ ] Wireframing and user flows !2024-08-10 (@alice) ($1500)
-  - 2024-07-26: Initial sketches completed. (@alice)
-  - 2024-07-27: Discussed with the product team, got feedback.
-- [x] UI/UX Design system (@alice) ~2024-07-20 ($2500)
-- [ ] Create brand style guide !2024-08-15 ($500)
-
-## Phase 2: Development
-
-- [ ] Setup CI/CD pipeline !2024-09-01 (@bob) ($2000)
-- [ ] Develop core API endpoints !2024-08-25 (@charlie) ($4000)
-- [ ] Frontend component library (@diana) ($3500)
-- [ ] Implement user authentication ($1200)
-
-# Project Phoenix: Q4 Initiatives 🦅
-
-This is a second project within the same file. You can switch between projects using the dropdown in the header.
-
-## Marketing & Outreach
-
-- [ ] Plan social media campaign !2024-10-15 (@ethan) ($1800)
-- [ ] Write blog posts for new features (@diana) ($750)
-
-## Infrastructure Update
-
-- [ ] Migrate database to new server !2024-11-01 (@bob) ($3000)
-- [ ] Update server dependencies ($400)`;
 
 type View = 'editor' | 'users' | 'overview' | 'timeline';
 type ViewScope = 'single' | 'all';
-
-const PROJECT_STORAGE_KEY = 'md-tasker-project-state';
-
-const loadProjectFromStorage = () => {
-    try {
-        const storedState = localStorage.getItem(PROJECT_STORAGE_KEY);
-        if (storedState) {
-            const data = JSON.parse(storedState);
-            if (data && typeof data.markdown === 'string' && Array.isArray(data.users)) {
-                return { markdown: data.markdown, users: data.users };
-            }
-        }
-    } catch (error) {
-        console.error('Failed to load project from localStorage:', error);
-    }
-    return { markdown: initialMarkdown, users: INITIAL_USERS };
-};
-
 
 const ProjectSwitcher: React.FC<{
   projects: Project[];
@@ -156,12 +101,20 @@ const ViewScopeToggle: React.FC<{ scope: ViewScope; onScopeChange: (scope: ViewS
 
 
 const App: React.FC = () => {
-  const [markdown, setMarkdown] = useState<string>(() => loadProjectFromStorage().markdown);
-  const [users, setUsers] = useState<User[]>(() => loadProjectFromStorage().users);
+  const {
+      markdown,
+      users,
+      settings,
+      projects,
+      setMarkdown,
+      setUsers,
+      saveSettings,
+      handleRequestLocalRestore,
+  } = useProject();
+
   const [view, setView] = useState<View>('editor');
   const [currentProjectIndex, setCurrentProjectIndex] = useState(0);
   const [viewScope, setViewScope] = useState<ViewScope>('all');
-  const [settings, saveSettings] = useSettings();
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isFullEditMode, setIsFullEditMode] = useState(false);
   const [fullEditContent, setFullEditContent] = useState('');
@@ -178,18 +131,7 @@ const App: React.FC = () => {
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [cloudBackups, setCloudBackups] = useState<BackupRecord[]>([]);
 
-  const projects = useMarkdownParser(markdown, users);
-  
   const isSupabaseConfigured = !!(settings.supabaseUrl && settings.supabaseAnonKey && settings.supabaseEmail);
-
-  useEffect(() => {
-    try {
-        const projectState = { markdown, users };
-        localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(projectState));
-    } catch (error) {
-        console.error('Failed to save project to localStorage:', error);
-    }
-  }, [markdown, users]);
 
   useEffect(() => {
     if (currentProjectIndex >= projects.length) {
@@ -231,111 +173,6 @@ const App: React.FC = () => {
     }
     return markdown;
   }, [markdown, viewScope, currentProjectIndex, projects]);
-
-  const handleSectionUpdate = useCallback((startLine: number, endLine: number, newContent: string) => {
-    const absoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex]) ? projects[currentProjectIndex].startLine + startLine : startLine;
-    const absoluteEndLine = (viewScope === 'single' && projects[currentProjectIndex]) ? projects[currentProjectIndex].startLine + endLine : endLine;
-
-    setMarkdown(prev => {
-        const lines = prev.split('\n');
-        const before = lines.slice(0, absoluteStartLine);
-        const after = lines.slice(absoluteEndLine + 1);
-        const newLines = newContent.split('\n');
-        return [...before, ...newLines, ...after].join('\n');
-    });
-  }, [viewScope, currentProjectIndex, projects]);
-
-  const handleUpdateTaskBlock = useCallback((absoluteStartLine: number, originalLineCount: number, newContent: string) => {
-    const trueAbsoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex])
-      ? projects[currentProjectIndex].startLine + absoluteStartLine
-      : absoluteStartLine;
-
-    setMarkdown(prev => {
-        const lines = prev.split('\n');
-        const before = lines.slice(0, trueAbsoluteStartLine);
-        const after = lines.slice(trueAbsoluteStartLine + originalLineCount);
-        const newLines = newContent.split('\n');
-        return [...before, ...newLines, ...after].join('\n');
-    });
-  }, [viewScope, currentProjectIndex, projects]);
-  
-  const handleToggle = useCallback((absoluteLineIndex: number, isCompleted: boolean) => {
-    const trueAbsoluteLineIndex = (viewScope === 'single' && projects[currentProjectIndex])
-      ? projects[currentProjectIndex].startLine + absoluteLineIndex
-      : absoluteLineIndex;
-
-    setMarkdown(prevMarkdown => {
-        const lines = prevMarkdown.split('\n');
-        if (trueAbsoluteLineIndex >= lines.length) return prevMarkdown;
-        const line = lines[trueAbsoluteLineIndex];
-
-        const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})/;
-        let newLine = line.replace(dateRegex, '');
-
-        if (isCompleted) {
-            const today = new Date().toISOString().split('T')[0];
-            newLine = `${newLine.trim()} ~${today}`;
-        }
-        
-        const taskRegex = /^- \[( |x)\]/;
-        newLine = newLine.replace(taskRegex, `- [${isCompleted ? 'x' : ' '}]`);
-        
-        lines[trueAbsoluteLineIndex] = newLine;
-        return lines.join('\n');
-    });
-  }, [viewScope, currentProjectIndex, projects]);
-
-  const handleMoveSection = useCallback((sectionToMove: {startLine: number, endLine: number}, destinationLine: number) => {
-    setMarkdown(prev => {
-        const lines = prev.split('\n');
-        
-        const sectionContent = lines.slice(sectionToMove.startLine, sectionToMove.endLine + 1);
-        
-        const linesWithoutSection = [
-            ...lines.slice(0, sectionToMove.startLine),
-            ...lines.slice(sectionToMove.endLine + 1)
-        ];
-
-        const adjustedDestinationLine = destinationLine > sectionToMove.startLine 
-            ? destinationLine - sectionContent.length 
-            : destinationLine;
-
-        const contentToInsert = [...sectionContent];
-
-        if (adjustedDestinationLine > 0 && linesWithoutSection[adjustedDestinationLine - 1]?.trim() !== '') {
-            contentToInsert.unshift('');
-        }
-        
-        if (adjustedDestinationLine < linesWithoutSection.length && linesWithoutSection[adjustedDestinationLine]?.trim() !== '') {
-            contentToInsert.push('');
-        }
-
-
-        const newLines = [
-            ...linesWithoutSection.slice(0, adjustedDestinationLine),
-            ...contentToInsert,
-            ...linesWithoutSection.slice(adjustedDestinationLine)
-        ];
-
-        return newLines.join('\n');
-    });
-  }, []);
-
-  const handleDuplicateSection = useCallback((sectionToDuplicate: {startLine: number, endLine: number}, destinationLine: number) => {
-    setMarkdown(prev => {
-        const lines = prev.split('\n');
-        
-        const sectionContent = lines.slice(sectionToDuplicate.startLine, sectionToDuplicate.endLine + 1);
-        
-        const newLines = [
-            ...lines.slice(0, destinationLine),
-            ...sectionContent,
-            ...lines.slice(destinationLine)
-        ];
-
-        return newLines.join('\n');
-    });
-  }, []);
 
   const handleToggleFullEdit = useCallback(() => {
     setFullEditContent(displayMarkdown);
@@ -395,98 +232,7 @@ const App: React.FC = () => {
       .filter(task => task.dueDate)
       .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
   }, [projects, currentProject, viewScope]);
-
-  const handleAddBulkTaskUpdates = useCallback((taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => {
-    setMarkdown(prevMarkdown => {
-        const lines = prevMarkdown.split('\n');
-        const today = new Date().toISOString().split('T')[0];
-        const assigneeString = assigneeAlias ? ` (@${assigneeAlias})` : '';
-        const newUpdateLine = `  - ${today}: ${updateText}${assigneeString}`;
-        const updateRegex = /^  - \d{4}-\d{2}-\d{2}: .*/;
-        
-        const sortedIndexes = [...taskLineIndexes].sort((a, b) => b - a);
-
-        for (const taskLineIndex of sortedIndexes) {
-            let insertAt = taskLineIndex + 1;
-            while (insertAt < lines.length && (updateRegex.test(lines[insertAt]) || lines[insertAt].trim() === '')) {
-                if (updateRegex.test(lines[insertAt])) {
-                    insertAt++;
-                } else {
-                    break;
-                }
-            }
-            lines.splice(insertAt, 0, newUpdateLine);
-        }
-        return lines.join('\n');
-    });
-  }, []);
-
-  const handleUpdateUser = useCallback((oldAlias: string, updatedUser: User) => {
-    setUsers(prevUsers => prevUsers.map(u => u.alias === oldAlias ? updatedUser : u));
-
-    if (oldAlias !== updatedUser.alias) {
-        setMarkdown(prevMarkdown => {
-            const searchRegex = new RegExp(`\\(@${oldAlias}\\)`, 'g');
-            return prevMarkdown.replace(searchRegex, `(@${updatedUser.alias})`);
-        });
-    }
-  }, []);
-
-  const handleDeleteUser = useCallback((userAlias: string) => {
-    setUsers(prevUsers => prevUsers.filter(u => u.alias !== userAlias));
-    
-    setMarkdown(prevMarkdown => {
-        const unassignRegex = new RegExp(`\\s\\(@${userAlias}\\)`, 'g');
-        return prevMarkdown.replace(unassignRegex, '');
-    });
-  }, []);
-
-  const handleAddUser = useCallback((newUser: Omit<User, 'avatarUrl'>) => {
-    if (users.some(u => u.alias === newUser.alias)) {
-      alert(`Alias "@${newUser.alias}" is already taken. Please choose a unique alias.`);
-      return;
-    }
-    const avatarUrl = `https://picsum.photos/seed/${newUser.alias}/40/40`;
-    setUsers(prev => [...prev, { ...newUser, avatarUrl }]);
-  }, [users]);
   
-  const handleExportProject = useCallback(() => {
-    const projectData = { users, markdown, settings };
-    const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
-    const filename = projects.length > 1 ? 'Multi-Project.mdtasker' : `${currentProject.title.replace(/\s/g, '_')}.mdtasker`;
-    saveAs(blob, filename);
-  }, [users, markdown, settings, projects, currentProject.title]);
-  
-  const handleImportProject = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-        try {
-            const content = event.target?.result as string;
-            const data = JSON.parse(content);
-            if (data && Array.isArray(data.users) && typeof data.markdown === 'string') {
-                setUsers(data.users);
-                setMarkdown(data.markdown);
-                if (data.settings) {
-                    saveSettings(data.settings as Settings);
-                }
-                setCurrentProjectIndex(0);
-                setViewScope('all');
-                alert('Project imported successfully!');
-            } else {
-                alert('Invalid project file format.');
-            }
-        } catch (error) {
-            console.error("Failed to parse project file", error);
-            alert('Failed to read or parse the project file.');
-        }
-    };
-    reader.readAsText(file);
-  }, [saveSettings]);
-
-  const handleRequestLocalRestore = useCallback((data: FullProjectState) => {
-    setRestoreConfirmation({ isOpen: true, data });
-  }, []);
-
   const handleConfirmRestore = useCallback(() => {
     if (!restoreConfirmation.data) return;
     
@@ -498,7 +244,7 @@ const App: React.FC = () => {
     
     setRestoreConfirmation({ isOpen: false, data: null });
     alert('Project restored successfully from cloud backup!');
-  }, [restoreConfirmation.data, saveSettings]);
+  }, [restoreConfirmation.data, saveSettings, setMarkdown, setUsers]);
   
   // --- Cloud Actions ---
   
@@ -547,7 +293,7 @@ const App: React.FC = () => {
         const client = getSupabaseClient(settings.supabaseUrl!, settings.supabaseAnonKey!);
         const backupData = await getBackupData(client, backupId);
         if (backupData) {
-            handleRequestLocalRestore(backupData);
+            setRestoreConfirmation({ isOpen: true, data: backupData });
         }
     } catch (error: any) {
          console.error("Restore failed:", error);
@@ -663,26 +409,13 @@ const App: React.FC = () => {
         return (
             <EditableDocumentView
               markdown={displayMarkdown}
-              users={users}
-              onSectionUpdate={handleSectionUpdate}
-              onToggle={handleToggle}
-              onUpdateTaskBlock={handleUpdateTaskBlock}
-              onMoveSection={handleMoveSection}
-              onDuplicateSection={handleDuplicateSection}
               projects={projects}
               viewScope={viewScope}
               currentProjectIndex={currentProjectIndex}
             />
         );
       case 'users':
-        return (
-          <UserManagement
-            users={users}
-            onAddUser={handleAddUser}
-            onUpdateUser={handleUpdateUser}
-            onDeleteUser={handleDeleteUser}
-          />
-        );
+        return <UserManagement />;
       case 'overview':
         return (
           <ProjectOverview
@@ -691,16 +424,12 @@ const App: React.FC = () => {
             projectTitle={dataForOverview.title}
             viewScope={viewScope}
             totalCost={dataForOverview.totalCost}
-            users={users}
-            settings={settings}
-            onAddBulkTaskUpdates={handleAddBulkTaskUpdates}
           />
         );
       case 'timeline':
         return (
           <TimelineView
             tasks={tasksForTimeline}
-            users={users}
             viewScope={viewScope}
           />
         );
@@ -786,11 +515,6 @@ const App: React.FC = () => {
             onSignOut={handleSignOut}
           />
           <ProjectActions
-              markdown={markdown}
-              projects={projects}
-              users={users}
-              onExportProject={handleExportProject}
-              onImportProject={handleImportProject}
               viewScope={viewScope}
               currentProject={currentProject}
           />
@@ -805,9 +529,6 @@ const App: React.FC = () => {
       <SettingsModal 
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
-        settings={settings}
-        onSave={saveSettings}
-        users={users}
       />
        <ConfirmationModal
           isOpen={restoreConfirmation.isOpen}
