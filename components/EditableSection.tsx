@@ -891,6 +891,11 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
     return elements;
   }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, handleToggleCollapse, isCollapsed, projectStartLine]);
 
+  const renderedNodes = useMemo(() => {
+    if (isEditing) return null; // Prevent expensive render when editing
+    return renderPreviewContent(tocHeadings);
+  }, [isEditing, renderPreviewContent, tocHeadings]);
+  
   if (isEditing) {
     return (
       <>
@@ -949,8 +954,10 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
     );
   }
   
-  const renderedNodes = useMemo(() => renderPreviewContent(tocHeadings), [renderPreviewContent, tocHeadings]);
-      
+  if (!renderedNodes) {
+    return null;
+  }
+        
   const headingNode = section.heading ? renderedNodes[0] : null;
   const contentNodes = section.heading ? renderedNodes.slice(1) : renderedNodes;
 
