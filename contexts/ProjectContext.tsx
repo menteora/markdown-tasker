@@ -38,7 +38,11 @@ This is a second project within the same file. You can switch between projects u
 - [ ] Migrate database to new server !2024-11-01 (@bob) ($3000)
 - [ ] Update server dependencies ($400)`;
 
-const PROJECT_STORAGE_KEY = 'md-tasker-project-state';
+const initialArchiveMarkdown = `# Archived Sections
+
+This is where your archived sections will be stored, organized by their original project.`;
+
+const PROJECT_STORAGE_KEY = 'md-tasker-project-state-v2';
 
 const loadProjectFromStorage = () => {
     try {
@@ -46,26 +50,32 @@ const loadProjectFromStorage = () => {
         if (storedState) {
             const data = JSON.parse(storedState);
             if (data && typeof data.markdown === 'string' && Array.isArray(data.users)) {
-                return { markdown: data.markdown, users: data.users };
+                return { 
+                    markdown: data.markdown, 
+                    users: data.users,
+                    archiveMarkdown: data.archiveMarkdown || initialArchiveMarkdown
+                };
             }
         }
     } catch (error) {
         console.error('Failed to load project from localStorage:', error);
     }
-    return { markdown: initialMarkdown, users: INITIAL_USERS };
+    return { markdown: initialMarkdown, users: INITIAL_USERS, archiveMarkdown: initialArchiveMarkdown };
 };
 
 interface ProjectContextType {
     markdown: string;
     setMarkdown: React.Dispatch<React.SetStateAction<string>>;
+    archiveMarkdown: string;
     users: User[];
     setUsers: React.Dispatch<React.SetStateAction<User[]>>;
     settings: Settings;
     saveSettings: (newSettings: Partial<Settings>) => void;
     projects: Project[];
-    updateSection: (startLine: number, endLine: number, newContent: string) => void;
+    archiveProjects: Project[];
+    updateSection: (startLine: number, endLine: number, newContent: string, isArchive: boolean) => void;
     toggleTask: (absoluteLineIndex: number, isCompleted: boolean) => void;
-    updateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
+    updateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string, isArchive: boolean) => void;
     moveSection: (sectionToMove: {startLine: number, endLine: number}, destinationLine: number) => void;
     duplicateSection: (sectionToDuplicate: {startLine: number, endLine: number}, destinationLine: number) => void;
     addBulkTaskUpdates: (taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => void;
@@ -74,28 +84,34 @@ interface ProjectContextType {
     deleteUser: (userAlias: string) => void;
     importProject: (file: File) => void;
     handleRequestLocalRestore: (data: FullProjectState) => void;
+    archiveSection: (section: { startLine: number, endLine: number }, projectTitle: string) => void;
+    restoreSection: (section: { startLine: number, endLine: number }, projectTitle: string) => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [markdown, setMarkdown] = useState<string>(() => loadProjectFromStorage().markdown);
-    const [users, setUsers] = useState<User[]>(() => loadProjectFromStorage().users);
+    const loadedState = useMemo(() => loadProjectFromStorage(), []);
+    const [markdown, setMarkdown] = useState<string>(loadedState.markdown);
+    const [archiveMarkdown, setArchiveMarkdown] = useState<string>(loadedState.archiveMarkdown);
+    const [users, setUsers] = useState<User[]>(loadedState.users);
     const [settings, saveSettings] = useSettingsHook();
 
     const projects = useMarkdownParser(markdown, users);
+    const archiveProjects = useMarkdownParser(archiveMarkdown, users);
 
     useEffect(() => {
         try {
-            const projectState = { markdown, users };
+            const projectState = { markdown, archiveMarkdown, users };
             localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(projectState));
         } catch (error) {
             console.error('Failed to save project to localStorage:', error);
         }
-    }, [markdown, users]);
+    }, [markdown, archiveMarkdown, users]);
     
-    const updateSection = useCallback((startLine: number, endLine: number, newContent: string) => {
-        setMarkdown(prev => {
+    const updateSection = useCallback((startLine: number, endLine: number, newContent: string, isArchive: boolean) => {
+        const setter = isArchive ? setArchiveMarkdown : setMarkdown;
+        setter(prev => {
             const lines = prev.split('\n');
             const before = lines.slice(0, startLine);
             const after = lines.slice(endLine + 1);
@@ -104,8 +120,9 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         });
     }, []);
 
-    const updateTaskBlock = useCallback((absoluteStartLine: number, originalLineCount: number, newContent: string) => {
-        setMarkdown(prev => {
+    const updateTaskBlock = useCallback((absoluteStartLine: number, originalLineCount: number, newContent: string, isArchive: boolean) => {
+        const setter = isArchive ? setArchiveMarkdown : setMarkdown;
+        setter(prev => {
             const lines = prev.split('\n');
             const before = lines.slice(0, absoluteStartLine);
             const after = lines.slice(absoluteStartLine + originalLineCount);
@@ -175,6 +192,84 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return newLines.join('\n');
         });
     }, []);
+    
+    const archiveSection = useCallback(({ startLine, endLine }: { startLine: number, endLine: number }, projectTitle: string) => {
+        const today = new Date().toISOString().split('T')[0];
+        let sectionContent: string[] = [];
+
+        setMarkdown(prev => {
+            const lines = prev.split('\n');
+            sectionContent = lines.slice(startLine, endLine + 1);
+            const linesWithoutSection = [
+                ...lines.slice(0, startLine),
+                ...lines.slice(endLine + 1)
+            ];
+            return linesWithoutSection.join('\n').replace(/\n\n\n/g, '\n\n').trim();
+        });
+
+        setArchiveMarkdown(prev => {
+            const lines = prev.split('\n');
+            const archiveProjectHeading = `# ${projectTitle}`;
+            let projectIndex = lines.findIndex(line => line.trim() === archiveProjectHeading);
+
+            const contentToInsert = [...sectionContent, `_Archived on: ${today}_`];
+
+            if (projectIndex === -1) {
+                return [...lines, '', archiveProjectHeading, ...contentToInsert].join('\n');
+            }
+
+            let nextProjectIndex = lines.findIndex((line, i) => i > projectIndex && line.startsWith('# '));
+            if (nextProjectIndex === -1) nextProjectIndex = lines.length;
+            
+            const before = lines.slice(0, nextProjectIndex);
+            const after = lines.slice(nextProjectIndex);
+            return [...before, '', ...contentToInsert, ...after].join('\n');
+        });
+    }, []);
+
+    const restoreSection = useCallback(({ startLine, endLine }: { startLine: number, endLine: number }, projectTitle: string) => {
+        let sectionContent: string[] = [];
+
+        setArchiveMarkdown(prev => {
+            const lines = prev.split('\n');
+            const rawSection = lines.slice(startLine, endLine + 1);
+            // Remove the archive date line
+            sectionContent = rawSection.filter(line => !line.startsWith('_Archived on:'));
+            
+            let linesWithoutSection = [
+                ...lines.slice(0, startLine),
+                ...lines.slice(endLine + 1)
+            ];
+            
+            // Clean up empty project if this was the last section
+            const projectInArchive = archiveProjects.find(p => p.title === projectTitle);
+            if (projectInArchive && projectInArchive.headings.length === 1 && projectInArchive.headings[0].line >= startLine && projectInArchive.headings[0].line <= endLine) {
+                 const projectLines = lines.slice(projectInArchive.startLine, projectInArchive.endLine + 1);
+                 const hasOtherContent = projectLines.some(line => line.trim() !== '' && !rawSection.includes(line));
+                 if (!hasOtherContent) {
+                    linesWithoutSection = [
+                        ...lines.slice(0, projectInArchive.startLine),
+                        ...lines.slice(projectInArchive.endLine + 1)
+                    ];
+                 }
+            }
+
+            return linesWithoutSection.join('\n').replace(/\n\n\n/g, '\n\n').trim();
+        });
+
+        setMarkdown(prev => {
+            const lines = prev.split('\n');
+            const destProject = projects.find(p => p.title === projectTitle);
+            if (!destProject) { 
+                // Should not happen if project exists, but as a fallback, append to end.
+                return [...lines, '', ...sectionContent].join('\n');
+            }
+
+            const before = lines.slice(0, destProject.endLine + 1);
+            const after = lines.slice(destProject.endLine + 1);
+            return [...before, '', ...sectionContent, ...after].join('\n');
+        });
+    }, [projects, archiveProjects]);
 
     const addBulkTaskUpdates = useCallback((taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => {
         setMarkdown(prevMarkdown => {
@@ -202,19 +297,18 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updateUser = useCallback((oldAlias: string, updatedUser: User) => {
         setUsers(prevUsers => prevUsers.map(u => u.alias === oldAlias ? updatedUser : u));
         if (oldAlias !== updatedUser.alias) {
-            setMarkdown(prevMarkdown => {
-                const searchRegex = new RegExp(`\\(@${oldAlias}\\)`, 'g');
-                return prevMarkdown.replace(searchRegex, `(@${updatedUser.alias})`);
-            });
+            const searchRegex = new RegExp(`\\(@${oldAlias}\\)`, 'g');
+            const replacement = `(@${updatedUser.alias})`;
+            setMarkdown(prev => prev.replace(searchRegex, replacement));
+            setArchiveMarkdown(prev => prev.replace(searchRegex, replacement));
         }
     }, []);
 
     const deleteUser = useCallback((userAlias: string) => {
         setUsers(prevUsers => prevUsers.filter(u => u.alias !== userAlias));
-        setMarkdown(prevMarkdown => {
-            const unassignRegex = new RegExp(`\\s\\(@${userAlias}\\)`, 'g');
-            return prevMarkdown.replace(unassignRegex, '');
-        });
+        const unassignRegex = new RegExp(`\\s\\(@${userAlias}\\)`, 'g');
+        setMarkdown(prev => prev.replace(unassignRegex, ''));
+        setArchiveMarkdown(prev => prev.replace(unassignRegex, ''));
     }, []);
 
     const addUser = useCallback((newUser: Omit<User, 'avatarUrl'>) => {
@@ -235,6 +329,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 if (data && Array.isArray(data.users) && typeof data.markdown === 'string') {
                     setUsers(data.users);
                     setMarkdown(data.markdown);
+                    setArchiveMarkdown(data.archiveMarkdown || initialArchiveMarkdown);
                     if (data.settings) {
                         saveSettings(data.settings as Settings);
                     }
@@ -258,11 +353,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const value: ProjectContextType = {
         markdown,
         setMarkdown,
+        archiveMarkdown,
         users,
         setUsers,
         settings,
         saveSettings,
         projects,
+        archiveProjects,
         updateSection,
         toggleTask,
         updateTaskBlock,
@@ -274,6 +371,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteUser,
         importProject,
         handleRequestLocalRestore,
+        archiveSection,
+        restoreSection,
     };
 
     return (

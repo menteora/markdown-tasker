@@ -11,19 +11,20 @@ interface EditableDocumentViewProps {
   projects: Project[];
   viewScope: 'single' | 'all';
   currentProjectIndex: number;
+  isArchiveView?: boolean;
 }
 
 const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
-  const { markdown, projects, viewScope, currentProjectIndex } = props;
-  const { users, updateSection, moveSection, duplicateSection, toggleTask, updateTaskBlock } = useProject();
+  const { markdown, projects, viewScope, currentProjectIndex, isArchiveView } = props;
+  const { users, updateSection, moveSection, duplicateSection, toggleTask, updateTaskBlock, archiveSection, restoreSection } = useProject();
   const sections = useSectionParser(markdown);
 
   const projectStartLine = useMemo(() => {
-    if (viewScope === 'single' && projects[currentProjectIndex]) {
+    if (viewScope === 'single' && projects[currentProjectIndex] && !isArchiveView) {
         return projects[currentProjectIndex].startLine;
     }
     return 0;
-  }, [viewScope, projects, currentProjectIndex]);
+  }, [viewScope, projects, currentProjectIndex, isArchiveView]);
   
   const handleMoveSectionWithOffset = useCallback((sectionToMove: {startLine: number, endLine: number}, destinationLine: number) => {
       const absoluteSectionToMove = {
@@ -44,35 +45,49 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
   }, [projectStartLine, duplicateSection]);
 
   const handleUpdateSection = useCallback((startLine: number, endLine: number, newContent: string) => {
-    const absoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex]) ? projects[currentProjectIndex].startLine + startLine : startLine;
-    const absoluteEndLine = (viewScope === 'single' && projects[currentProjectIndex]) ? projects[currentProjectIndex].startLine + endLine : endLine;
-    updateSection(absoluteStartLine, absoluteEndLine, newContent);
-  }, [viewScope, currentProjectIndex, projects, updateSection]);
+    const absoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex] && !isArchiveView) ? projects[currentProjectIndex].startLine + startLine : startLine;
+    const absoluteEndLine = (viewScope === 'single' && projects[currentProjectIndex] && !isArchiveView) ? projects[currentProjectIndex].startLine + endLine : endLine;
+    updateSection(absoluteStartLine, absoluteEndLine, newContent, !!isArchiveView);
+  }, [viewScope, currentProjectIndex, projects, updateSection, isArchiveView]);
 
   const handleToggleTask = useCallback((lineIndex: number, isCompleted: boolean) => {
-    const absoluteLineIndex = (viewScope === 'single' && projects[currentProjectIndex])
+    const absoluteLineIndex = (viewScope === 'single' && projects[currentProjectIndex] && !isArchiveView)
       ? projects[currentProjectIndex].startLine + lineIndex
       : lineIndex;
     toggleTask(absoluteLineIndex, isCompleted);
-  }, [viewScope, currentProjectIndex, projects, toggleTask]);
+  }, [viewScope, currentProjectIndex, projects, toggleTask, isArchiveView]);
 
   const handleUpdateTaskBlock = useCallback((startLine: number, lineCount: number, newContent: string) => {
-    const absoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex])
+    const absoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex] && !isArchiveView)
       ? projects[currentProjectIndex].startLine + startLine
       : startLine;
-    updateTaskBlock(absoluteStartLine, lineCount, newContent);
-  }, [viewScope, currentProjectIndex, projects, updateTaskBlock]);
+    updateTaskBlock(absoluteStartLine, lineCount, newContent, !!isArchiveView);
+  }, [viewScope, currentProjectIndex, projects, updateTaskBlock, isArchiveView]);
+  
+  const handleArchiveSection = useCallback((startLine: number, endLine: number, projectTitle: string) => {
+      const absoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex]) ? projects[currentProjectIndex].startLine + startLine : startLine;
+      const absoluteEndLine = (viewScope === 'single' && projects[currentProjectIndex]) ? projects[currentProjectIndex].startLine + endLine : endLine;
+      archiveSection({ startLine: absoluteStartLine, endLine: absoluteEndLine }, projectTitle);
+  }, [viewScope, currentProjectIndex, projects, archiveSection]);
+
+  const handleRestoreSection = useCallback((startLine: number, endLine: number, projectTitle: string) => {
+      // In archive view, startLine is already absolute
+      restoreSection({ startLine, endLine }, projectTitle);
+  }, [restoreSection]);
 
 
   return (
     <div className="h-full overflow-y-auto">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            {sections.length === 0 && (
+                <div className="text-center text-slate-500 py-16">
+                    <h2 className="text-2xl font-semibold">{isArchiveView ? "L'archivio è vuoto" : "Nessun contenuto"}</h2>
+                    <p>{isArchiveView ? "Le sezioni completate e archiviate appariranno qui." : "Inizia aggiungendo del contenuto."}</p>
+                </div>
+            )}
             <div className="space-y-4">
                 {sections.map((section, index) => {
-                    const projectForSection = viewScope === 'single'
-                        ? projects[currentProjectIndex]
-                        : projects.find(p => section.startLine + projectStartLine >= p.startLine && section.startLine + projectStartLine <= p.endLine);
-
+                    const projectForSection = projects.find(p => section.startLine >= p.startLine && section.startLine <= p.endLine);
                     const tocHeadings = projectForSection?.headings;
 
                     return (
@@ -86,10 +101,13 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
                             onDuplicateSection={handleDuplicateSectionWithOffset}
                             onToggle={handleToggleTask}
                             onUpdateTaskBlock={handleUpdateTaskBlock}
+                            onArchiveSection={handleArchiveSection}
+                            onRestoreSection={handleRestoreSection}
                             tocHeadings={tocHeadings}
                             users={users}
                             viewScope={viewScope}
-                            projectStartLine={projectStartLine}
+                            project={projectForSection}
+                            isArchiveView={isArchiveView}
                         />
                     );
                 })}

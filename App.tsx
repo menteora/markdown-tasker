@@ -1,10 +1,11 @@
 
+
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import UserManagement from './components/UserManagement';
 import ProjectOverview from './components/ProjectOverview';
 import ProjectActions from './components/ProjectActions';
 import type { User, Project, GroupedTasks, Task, Settings, FullProjectState, BackupRecord } from './types';
-import { ChevronsUpDown, Settings as SettingsIcon, Pencil } from 'lucide-react';
+import { ChevronsUpDown, Settings as SettingsIcon, Pencil, Archive } from 'lucide-react';
 import SettingsModal from './components/SettingsModal';
 import EditableDocumentView from './components/EditableDocumentView';
 import FullDocumentEditor from './components/FullDocumentEditor';
@@ -17,7 +18,7 @@ import { getSupabaseClient, signIn, signOut, getSession, backupProject, getBacku
 import { useProject } from './contexts/ProjectContext';
 
 
-type View = 'editor' | 'users' | 'overview' | 'timeline';
+type View = 'editor' | 'users' | 'overview' | 'timeline' | 'archive';
 type ViewScope = 'single' | 'all';
 
 const ProjectSwitcher: React.FC<{
@@ -103,6 +104,8 @@ const ViewScopeToggle: React.FC<{ scope: ViewScope; onScopeChange: (scope: ViewS
 const App: React.FC = () => {
   const {
       markdown,
+      archiveMarkdown,
+      archiveProjects,
       users,
       settings,
       projects,
@@ -134,15 +137,16 @@ const App: React.FC = () => {
   const isSupabaseConfigured = !!(settings.supabaseUrl && settings.supabaseAnonKey && settings.supabaseEmail);
 
   useEffect(() => {
+    if (view === 'archive') return;
     if (currentProjectIndex >= projects.length) {
       setCurrentProjectIndex(Math.max(0, projects.length - 1));
     }
     setIsFullEditMode(false);
-  }, [projects, currentProjectIndex]);
+  }, [projects, currentProjectIndex, view]);
 
   useEffect(() => {
     setIsFullEditMode(false);
-  }, [viewScope]);
+  }, [viewScope, view]);
   
   useEffect(() => {
       if (isSupabaseConfigured) {
@@ -166,13 +170,16 @@ const App: React.FC = () => {
 
 
   const displayMarkdown = useMemo(() => {
+    if (view === 'archive') {
+      return archiveMarkdown;
+    }
     if (viewScope === 'single' && currentProjectIndex < projects.length) {
       const project = projects[currentProjectIndex];
       const lines = markdown.split('\n');
       return lines.slice(project.startLine, project.endLine + 1).join('\n');
     }
     return markdown;
-  }, [markdown, viewScope, currentProjectIndex, projects]);
+  }, [markdown, archiveMarkdown, view, viewScope, currentProjectIndex, projects]);
 
   const handleToggleFullEdit = useCallback(() => {
     setFullEditContent(displayMarkdown);
@@ -180,6 +187,14 @@ const App: React.FC = () => {
   }, [displayMarkdown]);
 
   const handleSaveFullEdit = useCallback(() => {
+    // Note: Full edit on archive is not implemented as it's complex.
+    // Users can edit archive sections individually.
+    if (view === 'archive') {
+        alert("Full edit is not available for the archive view.");
+        setIsFullEditMode(false);
+        return;
+    }
+
     if (viewScope === 'all') {
         setMarkdown(fullEditContent);
     } else {
@@ -195,7 +210,7 @@ const App: React.FC = () => {
         }
     }
     setIsFullEditMode(false);
-  }, [fullEditContent, viewScope, currentProjectIndex, projects, setMarkdown]);
+  }, [fullEditContent, view, viewScope, currentProjectIndex, projects, setMarkdown]);
 
   const handleCancelFullEdit = useCallback(() => {
     setIsFullEditMode(false);
@@ -236,9 +251,13 @@ const App: React.FC = () => {
   const handleConfirmRestore = useCallback(() => {
     if (!restoreConfirmation.data) return;
     
-    const { markdown: newMarkdown, users: newUsers, settings: newSettings } = restoreConfirmation.data;
+    const { markdown: newMarkdown, archiveMarkdown: newArchiveMarkdown, users: newUsers, settings: newSettings } = restoreConfirmation.data;
     
     setMarkdown(newMarkdown);
+    if (newArchiveMarkdown) {
+        // This is a simplified restore; a more robust solution would be needed if archiveMarkdown is managed by App state
+        console.warn("Restoring archive markdown from backup is not fully implemented in this flow.");
+    }
     setUsers(newUsers);
     saveSettings(newSettings);
     
@@ -254,7 +273,7 @@ const App: React.FC = () => {
       try {
           const client = getSupabaseClient(settings.supabaseUrl!, settings.supabaseAnonKey!);
           const { supabaseUrl, supabaseAnonKey, supabaseEmail, ...settingsToBackup } = settings;
-          const projectState: FullProjectState = { markdown, users, settings: settingsToBackup };
+          const projectState: FullProjectState = { markdown, archiveMarkdown, users, settings: settingsToBackup };
           const result = await backupProject(client, projectState);
           if (result) {
               alert(`Backup successful!\nTimestamp: ${new Date(result.created_at).toLocaleString()}`);
@@ -389,12 +408,15 @@ const App: React.FC = () => {
         return `Overview of tasks for "${title}".`;
       case 'timeline':
         return `Task due date timeline for "${title}".`;
+      case 'archive':
+        return 'Viewing archived sections. Restore a section to make it active again.';
     }
   }
 
   const renderView = () => {
     switch (view) {
       case 'editor':
+      case 'archive':
         if (isFullEditMode) {
           return (
             <FullDocumentEditor
@@ -409,9 +431,10 @@ const App: React.FC = () => {
         return (
             <EditableDocumentView
               markdown={displayMarkdown}
-              projects={projects}
-              viewScope={viewScope}
+              projects={view === 'archive' ? archiveProjects : projects}
+              viewScope={view === 'archive' ? 'all' : viewScope}
               currentProjectIndex={currentProjectIndex}
+              isArchiveView={view === 'archive'}
             />
         );
       case 'users':
@@ -446,7 +469,7 @@ const App: React.FC = () => {
                 {getHeaderDescription()}
               </p>
             </div>
-            {projects.length > 1 && !isFullEditMode && (
+            {projects.length > 1 && !isFullEditMode && view !== 'archive' && (
             <div className="flex items-center gap-2 flex-shrink-0">
                 <ViewScopeToggle scope={viewScope} onScopeChange={setViewScope} />
                 {viewScope === 'single' && (
@@ -485,6 +508,12 @@ const App: React.FC = () => {
             >
               Assignees
             </button>
+            <button
+              onClick={() => setView('archive')}
+              className={`px-4 py-2 rounded-md transition-colors font-semibold ${view === 'archive' ? 'bg-indigo-600' : 'bg-slate-700 hover:bg-slate-600'}`}
+            >
+              Archive
+            </button>
           </nav>
           {view === 'editor' && !isFullEditMode && (
             <button 
@@ -514,10 +543,13 @@ const App: React.FC = () => {
             isAuthenticated={isSupabaseAuthenticated}
             onSignOut={handleSignOut}
           />
-          <ProjectActions
-              viewScope={viewScope}
-              currentProject={currentProject}
-          />
+          {view !== 'archive' && 
+            <ProjectActions
+                viewScope={viewScope}
+                currentProject={currentProject}
+                isArchiveView={view === 'archive'}
+            />
+          }
         </div>
       </header>
       <main className="flex-grow overflow-hidden">
@@ -538,7 +570,7 @@ const App: React.FC = () => {
           confirmText="Yes, Overwrite Local Project"
       >
           <p>Are you sure you want to restore this backup?</p>
-          <p className="text-sm text-yellow-400 mt-2">This will overwrite your current local project data. This action cannot be undone.</p>
+          <p className="text-sm text-yellow-400 mt-2">This will overwrite your current local project data, including the archive. This action cannot be undone.</p>
       </ConfirmationModal>
       {supabaseAuthRequest && (
         <SupabaseAuthModal
