@@ -72,6 +72,7 @@ export interface BackupRecord {
 
 export interface FullProjectState {
     markdown: string;
+    archiveMarkdown?: string;
     users: User[];
     settings: Omit<Settings, 'supabaseUrl' | 'supabaseAnonKey' | 'supabaseEmail'>;
 }

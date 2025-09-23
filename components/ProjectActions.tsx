@@ -13,10 +13,11 @@ type ViewScope = 'single' | 'all';
 interface ProjectActionsProps {
     viewScope: ViewScope;
     currentProject: Project;
+    isArchiveView?: boolean;
 }
 
-const ProjectActions: React.FC<ProjectActionsProps> = ({ viewScope, currentProject }) => {
-    const { markdown, projects, users, settings, importProject } = useProject();
+const ProjectActions: React.FC<ProjectActionsProps> = ({ viewScope, currentProject, isArchiveView }) => {
+    const { markdown, archiveMarkdown, projects, users, settings, importProject } = useProject();
     const [isOpen, setIsOpen] = useState(false);
     const [isDailyReportModalOpen, setIsDailyReportModalOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -32,12 +33,12 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ viewScope, currentProje
     }, []);
 
     const handleExportProject = useCallback(() => {
-        const projectData = { users, markdown, settings };
+        const projectData = { users, markdown, archiveMarkdown, settings };
         const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
         const filename = projects.length > 1 ? 'Multi-Project.mdtasker' : `${currentProject.title.replace(/\s/g, '_')}.mdtasker`;
         saveAs(blob, filename);
         setIsOpen(false);
-    }, [users, markdown, settings, projects, currentProject.title]);
+    }, [users, markdown, archiveMarkdown, settings, projects, currentProject.title]);
     
     const createInlinesFromMarkdown = (text: string, options: any = {}): (docx.TextRun | docx.ExternalHyperlink)[] => {
         const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);

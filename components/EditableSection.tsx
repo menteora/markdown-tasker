@@ -1,15 +1,16 @@
 
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import type { User, TaskUpdate, Task, Heading } from '../types';
+import type { User, TaskUpdate, Task, Heading, Project } from '../types';
 import { Section } from '../hooks/useSectionParser';
 import Toolbar from './Toolbar';
-import { Pencil, Save, X, CheckCircle2, CalendarDays, ChevronRight, ChevronDown } from 'lucide-react';
+import { Pencil, Save, X, CheckCircle2, CalendarDays, ChevronRight, ChevronDown, Archive, ArchiveRestore } from 'lucide-react';
 import InputModal from './InputModal';
 import DatePickerModal from './DatePickerModal';
 import MoveSectionControl from './MoveSectionControl';
 import DuplicateSectionControl from './DuplicateSectionControl';
 import TableOfContents from './TableOfContents';
+import ConfirmationModal from './ConfirmationModal';
 
 // Autocomplete Component for @ mentions
 interface MentionAutocompleteProps {
@@ -83,7 +84,8 @@ const InteractiveTaskItem: React.FC<{
   onToggle: (absoluteLineIndex: number, isCompleted: boolean) => void;
   onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
   users: User[];
-}> = ({ task, taskBlockContent, blockLineCount, absoluteStartLine, onToggle, onUpdateTaskBlock, users }) => {
+  isArchiveView?: boolean;
+}> = ({ task, taskBlockContent, blockLineCount, absoluteStartLine, onToggle, onUpdateTaskBlock, users, isArchiveView }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(taskBlockContent);
   const [areUpdatesVisible, setAreUpdatesVisible] = useState(false);
@@ -373,7 +375,7 @@ const InteractiveTaskItem: React.FC<{
   return (
     <div className="py-2 border-b border-slate-800">
         <div className="flex items-start space-x-3 group">
-            <input type="checkbox" checked={task.completed} onChange={(e) => onToggle(absoluteStartLine, e.target.checked)} className="h-5 w-5 rounded-md bg-slate-700 border-slate-600 text-indigo-500 focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 cursor-pointer flex-shrink-0 mt-1"/>
+            <input type="checkbox" checked={task.completed} onChange={(e) => onToggle(absoluteStartLine, e.target.checked)} className="h-5 w-5 rounded-md bg-slate-700 border-slate-600 text-indigo-500 focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 cursor-pointer flex-shrink-0 mt-1" disabled={isArchiveView}/>
             <div className="flex-grow min-w-0">
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <span className={`leading-snug ${task.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
@@ -452,12 +454,16 @@ interface EditableSectionProps {
   onDuplicateSection: (sectionToDuplicate: {startLine: number, endLine: number}, destinationLine: number) => void;
   onToggle: (lineIndex: number, isCompleted: boolean) => void;
   onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
+  onArchiveSection: (startLine: number, endLine: number, projectTitle: string) => void;
+  onRestoreSection: (startLine: number, endLine: number, projectTitle: string) => void;
   tocHeadings?: Heading[];
   viewScope: 'single' | 'all';
-  projectStartLine: number;
+  project?: Project;
+  isArchiveView?: boolean;
 }
 
-const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, tocHeadings, viewScope, projectStartLine = 0, ...props }) => {
+const EditableSection: React.FC<EditableSectionProps> = (props) => {
+  const { section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, onArchiveSection, onRestoreSection, tocHeadings, viewScope, project, isArchiveView } = props;
   const [isEditing, setIsEditing] = useState(() => !section.content.trim());
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [editedContent, setEditedContent] = useState(section.content);
@@ -465,7 +471,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
   const mirrorRef = useRef<HTMLDivElement>(null);
   const userByAlias = useMemo(() => new Map(props.users.map(u => [u.alias, u])), [props.users]);
   
-  // Input Modal state
+  // Modals state
   const [isInputModalOpen, setIsInputModalOpen] = useState(false);
   const [inputModalConfig, setInputModalConfig] = useState<{
       onSubmit: (value: string) => void;
@@ -474,12 +480,22 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
       confirmText: string;
   } | null>(null);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
 
   // Mention autocomplete state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionPosition, setMentionPosition] = useState<{ top: number, left: number } | null>(null);
   const [filteredMentionUsers, setFilteredMentionUsers] = useState<User[]>([]);
   const [activeMentionIndex, setActiveMentionIndex] = useState(0);
+
+  const isArchivable = useMemo(() => {
+    if (isArchiveView) return false;
+    const taskRegex = /^- \[([ x])\] .*/;
+    const lines = section.content.split('\n');
+    const tasks = lines.map(line => line.match(taskRegex)).filter((match): match is RegExpMatchArray => !!match);
+    if (tasks.length === 0) return false;
+    return tasks.every(taskMatch => taskMatch[1] === 'x');
+  }, [section.content, isArchiveView]);
 
   useEffect(() => {
     setEditedContent(section.content);
@@ -529,6 +545,13 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
   const handleDuplicate = (destinationLine: number) => {
     onDuplicateSection({ startLine: section.startLine, endLine: section.endLine }, destinationLine);
   };
+  
+  const handleConfirmRestore = () => {
+      if (project) {
+        onRestoreSection(section.startLine, section.endLine, project.title);
+      }
+      setIsRestoreConfirmOpen(false);
+  }
 
   const handleMentionSelect = useCallback((user: User) => {
     const textarea = textareaRef.current;
@@ -795,13 +818,24 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
     while (i < lines.length) {
       const line = lines[i];
       const relativeLineIndex = section.startLine + i;
-      const absoluteLineIndex = projectStartLine + relativeLineIndex;
+      const absoluteLineIndex = (project?.startLine ?? 0) + relativeLineIndex;
+      
+      const archiveDateMatch = line.match(/^_Archived on: (.*)_/);
+      if (isArchiveView && archiveDateMatch) {
+          elements.push(
+              <blockquote key={`archive-date-${i}`} className="border-l-4 border-slate-600 pl-4 py-2 my-4 text-slate-400 italic">
+                  Archived on: {archiveDateMatch[1]}
+              </blockquote>
+          );
+          i++;
+          continue;
+      }
 
       const hMatch = line.match(/^(#+) (.*)/);
       if (hMatch && i === 0 && section.heading) { // This is the main section heading.
           const level = hMatch[1].length;
           const text = hMatch[2].trim();
-          const headingData = tocHeadingsForSlugs?.find(h => h.line === absoluteLineIndex);
+          const headingData = tocHeadingsForSlugs?.find(h => h.line === (viewScope === 'single' && !isArchiveView ? relativeLineIndex + project.startLine : relativeLineIndex));
           
           let headingClassName: string;
           let buttonClassName = "font-bold flex items-center w-full text-left transition-colors hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded p-1 -ml-1";
@@ -878,6 +912,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
                 onToggle={props.onToggle}
                 onUpdateTaskBlock={props.onUpdateTaskBlock}
                 users={props.users} 
+                isArchiveView={isArchiveView}
             />
           );
           i = j; continue;
@@ -889,7 +924,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
       i++;
     }
     return elements;
-  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, handleToggleCollapse, isCollapsed, projectStartLine]);
+  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, handleToggleCollapse, isCollapsed, project, viewScope, isArchiveView]);
 
   const renderedNodes = useMemo(() => {
     if (isEditing) return null; // Prevent expensive render when editing
@@ -962,23 +997,48 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
   const contentNodes = section.heading ? renderedNodes.slice(1) : renderedNodes;
 
   return (
+    <>
     <div className="relative group bg-slate-800/30 hover:bg-slate-800/50 rounded-lg transition-colors duration-200">
-       {tocHeadings && section.heading?.level === 1 && (
+       {tocHeadings && section.heading?.level === 1 && !isArchiveView && (
         <TableOfContents headings={tocHeadings} />
        )}
        <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
-        <DuplicateSectionControl
-            allSections={allSections}
-            currentSectionIndex={sectionIndex}
-            onDuplicateSection={handleDuplicate}
-            viewScope={viewScope}
-        />
-        <MoveSectionControl
-          allSections={allSections}
-          currentSectionIndex={sectionIndex}
-          onMoveSection={handleMove}
-          viewScope={viewScope}
-        />
+        {isArchivable && (
+            <button 
+                onClick={() => onArchiveSection(section.startLine, section.endLine, project!.title)}
+                className="p-2 rounded-full bg-slate-700/50 text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 hover:bg-indigo-600 hover:text-white"
+                aria-label="Archive section"
+                title="Archive section"
+            >
+                <Archive className="w-4 h-4" />
+            </button>
+        )}
+        {isArchiveView && (
+            <button 
+                onClick={() => setIsRestoreConfirmOpen(true)}
+                className="p-2 rounded-full bg-slate-700/50 text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 hover:bg-indigo-600 hover:text-white"
+                aria-label="Restore section"
+                title="Restore section"
+            >
+                <ArchiveRestore className="w-4 h-4" />
+            </button>
+        )}
+        {!isArchiveView && (
+          <>
+            <DuplicateSectionControl
+                allSections={allSections}
+                currentSectionIndex={sectionIndex}
+                onDuplicateSection={handleDuplicate}
+                viewScope={viewScope}
+            />
+            <MoveSectionControl
+              allSections={allSections}
+              currentSectionIndex={sectionIndex}
+              onMoveSection={handleMove}
+              viewScope={viewScope}
+            />
+          </>
+        )}
        <button 
         onClick={() => setIsEditing(true)} 
         className="p-2 rounded-full bg-slate-700/50 text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 hover:bg-indigo-600 hover:text-white"
@@ -994,6 +1054,17 @@ const EditableSection: React.FC<EditableSectionProps> = ({ section, sectionIndex
         </div>
       </div>
     </div>
+     <ConfirmationModal
+          isOpen={isRestoreConfirmOpen}
+          onClose={() => setIsRestoreConfirmOpen(false)}
+          onConfirm={handleConfirmRestore}
+          title="Restore Section"
+          confirmText="Yes, Restore"
+      >
+          <p>Are you sure you want to restore this section to the project <strong className="text-slate-200">"{project?.title}"</strong>?</p>
+          <p className="text-sm text-slate-400 mt-2">The section will be removed from the archive and become active again.</p>
+      </ConfirmationModal>
+    </>
   );
 };
 
