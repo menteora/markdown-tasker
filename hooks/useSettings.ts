@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS: Settings = {
   emailPostamble: 'Please provide an update when you can.\n\nBest regards,',
   emailSignature: '{senderName}',
   reminderMessage: 'Reminder sent.',
+  emailCreationDateLabel: 'Created:',
   ccAlias: null,
   supabaseUrl: null,
   supabaseAnonKey: null,
