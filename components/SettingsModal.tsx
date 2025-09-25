@@ -68,6 +68,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         <input type="text" id="reminderMessage" name="reminderMessage" value={currentSettings.reminderMessage} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none" />
                     </div>
                     <div>
+                        <label htmlFor="emailCreationDateLabel" className="block text-sm font-medium text-slate-300 mb-1">Email Creation Date Label</label>
+                        <p className="text-xs text-slate-500 mb-2">The label used for the task creation date in emails (e.g., "Created:", "Creato il:").</p>
+                        <input type="text" id="emailCreationDateLabel" name="emailCreationDateLabel" value={currentSettings.emailCreationDateLabel} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                    </div>
+                    <div>
                         <label htmlFor="emailSubject" className="block text-sm font-medium text-slate-300 mb-1">Email Subject</label>
                         <p className="text-xs text-slate-500 mb-2">Use <code className="bg-slate-900 px-1 rounded">{'{projectTitle}'}</code> as a placeholder.</p>
                         <input type="text" id="emailSubject" name="emailSubject" value={currentSettings.emailSubject} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none" />

@@ -58,6 +58,7 @@ export interface Settings {
   emailPostamble: string;
   emailSignature: string;
   reminderMessage: string;
+  emailCreationDateLabel: string;
   ccAlias?: string | null;
   supabaseUrl?: string | null;
   supabaseAnonKey?: string | null;

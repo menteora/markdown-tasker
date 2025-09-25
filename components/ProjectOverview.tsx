@@ -156,8 +156,9 @@ const UserTaskCard: React.FC<{
           .map(title => {
               const projectTasks = tasksByProject[title].map(task => {
                 const costString = task.cost ? ` ($${task.cost.toFixed(2)})` : '';
+                const creationDateString = task.creationDate ? ` (${settings.emailCreationDateLabel} ${new Date(task.creationDate + 'T00:00:00').toLocaleDateString()})` : '';
                 const formattedText = formatMarkdownForEmail(task.text);
-                return `- [ ] ${formattedText}${costString}`;
+                return `- [ ] ${formattedText}${costString}${creationDateString}`;
               }).join('\n');
               return projectTitles.length > 1 ? `\nProject: ${title}\n${projectTasks}` : projectTasks;
           })
