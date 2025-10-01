@@ -143,6 +143,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                         updates,
                         projectTitle: boundary.title,
                         cost,
+                        blockEndLine: startLine + (j - 1),
                     });
                     i = j;
                 } else {

@@ -1,10 +1,11 @@
 
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import type { User, Task, GroupedTasks, Settings } from '../types';
-import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2, CalendarDays } from 'lucide-react';
+import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2, CalendarDays, Pencil } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
 import { useProject } from '../contexts/ProjectContext';
+import TaskEditModal from './TaskEditModal';
 
 const formatMarkdownForEmail = (text: string): string => {
   const linkRegex = /\[(.*?)\]\((.*?)\)/g;
@@ -44,7 +45,7 @@ interface ProjectOverviewProps {
   totalCost: number;
 }
 
-const TaskItem: React.FC<{ task: Task; viewScope: ViewScope }> = ({ task, viewScope }) => {
+const TaskItem: React.FC<{ task: Task; viewScope: ViewScope; onEdit: (task: Task) => void; }> = ({ task, viewScope, onEdit }) => {
     const getDueDateInfo = (dateString: string | null, isCompleted: boolean): { color: string, label: string } | null => {
         if (!dateString || isCompleted) return null;
         const today = new Date();
@@ -67,7 +68,7 @@ const TaskItem: React.FC<{ task: Task; viewScope: ViewScope }> = ({ task, viewSc
     const dueDateInfo = getDueDateInfo(task.dueDate, task.completed);
 
     return (
-      <div className="flex items-start space-x-3">
+      <div className="flex items-start space-x-3 group relative">
         {task.completed ? (
           <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
         ) : (
@@ -100,6 +101,16 @@ const TaskItem: React.FC<{ task: Task; viewScope: ViewScope }> = ({ task, viewSc
             </span>
           )}
         </div>
+        <div className="absolute top-0 right-0">
+            <button
+                onClick={() => onEdit(task)}
+                className="p-1 rounded-full hover:bg-slate-700 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                aria-label="Edit task"
+                title="Edit task"
+            >
+                <Pencil className="w-4 h-4" />
+            </button>
+        </div>
       </div>
     );
 };
@@ -121,7 +132,8 @@ const UserTaskCard: React.FC<{
     tasks: Task[]; 
     projectTitle: string; 
     viewScope: ViewScope;
-}> = ({ user, tasks, projectTitle, viewScope }) => {
+    onEditTask: (task: Task) => void;
+}> = ({ user, tasks, projectTitle, viewScope, onEditTask }) => {
   const { users, settings, addBulkTaskUpdates } = useProject();
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const completedTasks = tasks.filter(t => t.completed).length;
@@ -216,7 +228,7 @@ const UserTaskCard: React.FC<{
         </div>
         <div className="space-y-3 overflow-y-auto flex-grow">
           {tasks.map((task, index) => (
-            <TaskItem key={index} task={task} viewScope={viewScope} />
+            <TaskItem key={index} task={task} viewScope={viewScope} onEdit={onEditTask} />
           ))}
         </div>
       </div>
@@ -254,12 +266,20 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string; 
 
 
 const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassignedTasks, projectTitle, viewScope, totalCost }) => {
-  // FIX: Add explicit type to lambda parameter to fix 'tasks' property does not exist on type 'unknown' error.
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  const handleEditTask = useCallback((task: Task) => {
+    setEditingTask(task);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setEditingTask(null);
+  }, []);
+
   const allTasks = [...Object.values(groupedTasks).flatMap((g: { user: User; tasks: Task[] }) => g.tasks), ...unassignedTasks];
   const totalTasks = allTasks.length;
   const completedTasks = allTasks.filter(t => t.completed).length;
   const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-  // FIX: Add explicit type to lambda parameter to fix 'tasks' property does not exist on type 'unknown' error.
   const assignedUsersWithTasks = Object.values(groupedTasks).filter((group: { user: User; tasks: Task[] }) => group.tasks.length > 0);
   const unassignedCost = unassignedTasks.reduce((sum, task) => sum + (task.cost ?? 0), 0);
 
@@ -273,7 +293,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassig
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {assignedUsersWithTasks.map(({ user, tasks }) => (
-          <UserTaskCard key={user.alias} user={user} tasks={tasks} projectTitle={projectTitle} viewScope={viewScope} />
+          <UserTaskCard key={user.alias} user={user} tasks={tasks} projectTitle={projectTitle} viewScope={viewScope} onEditTask={handleEditTask} />
         ))}
 
         {unassignedTasks.length > 0 && (
@@ -292,7 +312,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassig
             </div>
             <div className="space-y-3">
               {unassignedTasks.map((task, index) => (
-                <TaskItem key={index} task={task} viewScope={viewScope} />
+                <TaskItem key={index} task={task} viewScope={viewScope} onEdit={handleEditTask} />
               ))}
             </div>
           </div>
@@ -304,6 +324,13 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassig
             <p>Your markdown file doesn't seem to have any tasks.</p>
             <p>Try adding a task like `- [ ] My new task` in the editor.</p>
         </div>
+      )}
+      {editingTask && (
+        <TaskEditModal
+            isOpen={!!editingTask}
+            onClose={handleCloseModal}
+            task={editingTask}
+        />
       )}
     </div>
   );

@@ -899,7 +899,7 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
           }
           const task: Task = {
             lineIndex: relativeLineIndex, text: fullTaskText, completed: taskMatch[1] === 'x', assigneeAlias: assignee?.alias ?? null,
-            creationDate, completionDate, dueDate, updates, projectTitle: '', cost,
+            creationDate, completionDate, dueDate, updates, projectTitle: '', cost, blockEndLine: section.startLine + j - 1,
           };
 
           elements.push(
