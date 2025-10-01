@@ -122,6 +122,7 @@ const App: React.FC = () => {
   const [isFullEditMode, setIsFullEditMode] = useState(false);
   const [fullEditContent, setFullEditContent] = useState('');
   const [restoreConfirmation, setRestoreConfirmation] = useState<{ isOpen: boolean; data: FullProjectState | null }>({ isOpen: false, data: null });
+  const [scrollToSlug, setScrollToSlug] = useState<string | null>(null);
   
   // Cloud state
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
@@ -167,6 +168,28 @@ const App: React.FC = () => {
           setIsSupabaseAuthenticated(false);
       }
   }, [isSupabaseConfigured, settings.supabaseUrl, settings.supabaseAnonKey]);
+
+  useEffect(() => {
+    if (scrollToSlug && view === 'editor') {
+      setTimeout(() => {
+        const element = document.getElementById(scrollToSlug);
+        const parentSection = element?.closest('.group');
+        
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        if (parentSection) {
+          parentSection.classList.add('highlight-section');
+          setTimeout(() => {
+            parentSection.classList.remove('highlight-section');
+          }, 2000);
+        }
+        
+        setScrollToSlug(null);
+      }, 100);
+    }
+  }, [scrollToSlug, view]);
 
 
   const displayMarkdown = useMemo(() => {
@@ -392,6 +415,15 @@ const App: React.FC = () => {
         setIsLoadingCloud(false);
     }
   };
+  
+  const handleNavigateToSection = useCallback((projectTitle: string, sectionSlug: string) => {
+    const projectIndex = projects.findIndex(p => p.title === projectTitle);
+    if (projectIndex !== -1) {
+      setView('editor');
+      setCurrentProjectIndex(projectIndex);
+      setScrollToSlug(sectionSlug);
+    }
+  }, [projects]);
 
 
   const getHeaderDescription = () => {
@@ -447,6 +479,7 @@ const App: React.FC = () => {
             projectTitle={dataForOverview.title}
             viewScope={viewScope}
             totalCost={dataForOverview.totalCost}
+            onNavigate={handleNavigateToSection}
           />
         );
       case 'timeline':

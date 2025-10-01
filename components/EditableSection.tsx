@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { User, TaskUpdate, Task, Heading, Project } from '../types';
 import { Section } from '../hooks/useSectionParser';
@@ -133,11 +134,38 @@ const InteractiveTaskItem: React.FC<{
     setIsEditing(false);
   };
   
-  const handleInsertTextAtCursor = useCallback((text: string) => {
+  const handleInsertTextAtCursor = useCallback((text: string, type?: 'assignee') => {
         const textarea = textareaRef.current;
         if (!textarea) return;
 
-        const { selectionStart, selectionEnd } = textarea;
+        const { selectionStart } = textarea;
+
+        if (type === 'assignee') {
+            const textBeforeCursor = editedContent.substring(0, selectionStart);
+            const lineStart = textBeforeCursor.lastIndexOf('\n') + 1;
+            
+            let lineEnd = editedContent.indexOf('\n', selectionStart);
+            if (lineEnd === -1) lineEnd = editedContent.length;
+
+            let currentLine = editedContent.substring(lineStart, lineEnd);
+            
+            const globalAssigneeRegex = /\s\(@([a-zA-Z0-9_]+)\)/g;
+            currentLine = currentLine.replace(globalAssigneeRegex, '');
+
+            const newCurrentLine = currentLine.trimEnd() + ' ' + text;
+
+            const newContent = editedContent.substring(0, lineStart) + newCurrentLine + editedContent.substring(lineEnd);
+            setEditedContent(newContent);
+
+            setTimeout(() => {
+                textarea.focus();
+                const newCursorPos = lineStart + newCurrentLine.length;
+                textarea.setSelectionRange(newCursorPos, newCursorPos);
+            }, 0);
+            return;
+        }
+
+        const { selectionEnd } = textarea;
         const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
         const spaceBefore = /\s$/.test(charBefore) ? '' : ' ';
         const insertion = `${spaceBefore}${text}`;
@@ -625,11 +653,38 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
       }
   };
   
-    const handleInsertTextAtCursor = useCallback((text: string) => {
+    const handleInsertTextAtCursor = useCallback((text: string, type?: 'assignee') => {
         const textarea = textareaRef.current;
         if (!textarea) return;
 
-        const { selectionStart, selectionEnd } = textarea;
+        const { selectionStart } = textarea;
+
+        if (type === 'assignee') {
+            const textBeforeCursor = editedContent.substring(0, selectionStart);
+            const lineStart = textBeforeCursor.lastIndexOf('\n') + 1;
+            
+            let lineEnd = editedContent.indexOf('\n', selectionStart);
+            if (lineEnd === -1) lineEnd = editedContent.length;
+
+            let currentLine = editedContent.substring(lineStart, lineEnd);
+            
+            const globalAssigneeRegex = /\s\(@([a-zA-Z0-9_]+)\)/g;
+            currentLine = currentLine.replace(globalAssigneeRegex, '');
+
+            const newCurrentLine = currentLine.trimEnd() + ' ' + text;
+
+            const newContent = editedContent.substring(0, lineStart) + newCurrentLine + editedContent.substring(lineEnd);
+            setEditedContent(newContent);
+
+            setTimeout(() => {
+                textarea.focus();
+                const newCursorPos = lineStart + newCurrentLine.length;
+                textarea.setSelectionRange(newCursorPos, newCursorPos);
+            }, 0);
+            return;
+        }
+
+        const { selectionEnd } = textarea;
         const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
         const spaceBefore = /\s$/.test(charBefore) ? '' : ' ';
         const insertion = `${spaceBefore}${text}`;

@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Bold, Italic, List, ListTodo, UserPlus, Link, Mail, MessageSquarePlus, CalendarDays } from 'lucide-react';
 import type { User } from '../types';
@@ -8,7 +9,7 @@ type FormatType = 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'u
 
 interface ToolbarProps {
   onFormat: (type: FormatType) => void;
-  onInsert: (text: string) => void;
+  onInsert: (text: string, type?: 'assignee') => void;
   users: User[];
 }
 
@@ -60,7 +61,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onFormat, onInsert, users }) => {
 
 
   const handleAssigneeSelect = (alias: string) => {
-    onInsert(`(@${alias})`);
+    onInsert(`(@${alias})`, 'assignee');
     setIsAssigneeDropdownOpen(false);
   };
 

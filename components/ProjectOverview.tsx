@@ -43,9 +43,15 @@ interface ProjectOverviewProps {
   projectTitle: string;
   viewScope: ViewScope;
   totalCost: number;
+  onNavigate: (projectTitle: string, sectionSlug: string) => void;
 }
 
-const TaskItem: React.FC<{ task: Task; viewScope: ViewScope; onEdit: (task: Task) => void; }> = ({ task, viewScope, onEdit }) => {
+const TaskItem: React.FC<{ 
+    task: Task; 
+    viewScope: ViewScope; 
+    onEdit: (task: Task) => void;
+    onNavigate: (projectTitle: string, sectionSlug: string) => void;
+}> = ({ task, viewScope, onEdit, onNavigate }) => {
     const getDueDateInfo = (dateString: string | null, isCompleted: boolean): { color: string, label: string } | null => {
         if (!dateString || isCompleted) return null;
         const today = new Date();
@@ -66,6 +72,11 @@ const TaskItem: React.FC<{ task: Task; viewScope: ViewScope; onEdit: (task: Task
     };
   
     const dueDateInfo = getDueDateInfo(task.dueDate, task.completed);
+    
+    const contextPath = [
+        viewScope === 'all' ? task.projectTitle : null,
+        task.sectionTitle
+    ].filter(Boolean).join(' > ');
 
     return (
       <div className="flex items-start space-x-3 group relative">
@@ -89,7 +100,17 @@ const TaskItem: React.FC<{ task: Task; viewScope: ViewScope; onEdit: (task: Task
                 {dueDateInfo.label}
              </span>
            )}
-          {viewScope === 'all' && <span className="block text-xs text-indigo-400 font-medium mt-1">{task.projectTitle}</span>}
+           {contextPath && task.sectionSlug ? (
+              <button 
+                onClick={() => onNavigate(task.projectTitle, task.sectionSlug!)} 
+                className="block text-xs text-indigo-400 font-medium mt-1 hover:underline text-left"
+                title={`Go to section: ${task.sectionTitle}`}
+              >
+                {contextPath}
+              </button>
+            ) : viewScope === 'all' ? (
+              <span className="block text-xs text-slate-500 font-medium mt-1">{task.projectTitle}</span>
+            ) : null}
           {task.creationDate && (
             <span className="block text-xs text-slate-400">
               Created: {task.creationDate}
@@ -133,7 +154,8 @@ const UserTaskCard: React.FC<{
     projectTitle: string; 
     viewScope: ViewScope;
     onEditTask: (task: Task) => void;
-}> = ({ user, tasks, projectTitle, viewScope, onEditTask }) => {
+    onNavigate: (projectTitle: string, sectionSlug: string) => void;
+}> = ({ user, tasks, projectTitle, viewScope, onEditTask, onNavigate }) => {
   const { users, settings, addBulkTaskUpdates } = useProject();
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const completedTasks = tasks.filter(t => t.completed).length;
@@ -228,7 +250,7 @@ const UserTaskCard: React.FC<{
         </div>
         <div className="space-y-3 overflow-y-auto flex-grow">
           {tasks.map((task, index) => (
-            <TaskItem key={index} task={task} viewScope={viewScope} onEdit={onEditTask} />
+            <TaskItem key={index} task={task} viewScope={viewScope} onEdit={onEditTask} onNavigate={onNavigate}/>
           ))}
         </div>
       </div>
@@ -265,7 +287,7 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string; 
 );
 
 
-const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassignedTasks, projectTitle, viewScope, totalCost }) => {
+const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassignedTasks, projectTitle, viewScope, totalCost, onNavigate }) => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const handleEditTask = useCallback((task: Task) => {
@@ -293,7 +315,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassig
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {assignedUsersWithTasks.map(({ user, tasks }) => (
-          <UserTaskCard key={user.alias} user={user} tasks={tasks} projectTitle={projectTitle} viewScope={viewScope} onEditTask={handleEditTask} />
+          <UserTaskCard key={user.alias} user={user} tasks={tasks} projectTitle={projectTitle} viewScope={viewScope} onEditTask={handleEditTask} onNavigate={onNavigate} />
         ))}
 
         {unassignedTasks.length > 0 && (
@@ -312,7 +334,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassig
             </div>
             <div className="space-y-3">
               {unassignedTasks.map((task, index) => (
-                <TaskItem key={index} task={task} viewScope={viewScope} onEdit={handleEditTask} />
+                <TaskItem key={index} task={task} viewScope={viewScope} onEdit={handleEditTask} onNavigate={onNavigate} />
               ))}
             </div>
           </div>
