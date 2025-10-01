@@ -25,6 +25,7 @@ export interface Task {
   updates: TaskUpdate[];
   projectTitle: string;
   cost?: number;
+  blockEndLine: number;
 }
 
 export interface GroupedTasks {
