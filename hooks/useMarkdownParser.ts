@@ -65,6 +65,8 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
             const updateRegex = /^  - (\d{4}-\d{2}-\d{2}): (.*)/;
             
             let i = 0;
+            let currentHeading: Heading | null = null;
+
             while (i < projectLines.length) {
                 const line = projectLines[i];
                 const absoluteLineIndex = startLine + i;
@@ -73,13 +75,16 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                 if (hMatch) {
                     const level = hMatch[1].length;
                     const text = hMatch[2].trim();
+                    const headingData: Heading = {
+                        text,
+                        slug: slugify(text, existingSlugs),
+                        level,
+                        line: absoluteLineIndex,
+                    };
+
+                    currentHeading = headingData;
                     if (level <= 3) {
-                         currentProjectHeadings.push({
-                            text,
-                            slug: slugify(text, existingSlugs),
-                            level,
-                            line: absoluteLineIndex,
-                        });
+                         currentProjectHeadings.push(headingData);
                     }
                 }
                 
@@ -144,6 +149,8 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                         projectTitle: boundary.title,
                         cost,
                         blockEndLine: startLine + (j - 1),
+                        sectionTitle: currentHeading?.text,
+                        sectionSlug: currentHeading?.slug,
                     });
                     i = j;
                 } else {

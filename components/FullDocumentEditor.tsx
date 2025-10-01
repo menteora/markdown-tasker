@@ -1,5 +1,6 @@
 
 
+
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Save, X } from 'lucide-react';
 import type { User } from '../types';
@@ -34,11 +35,38 @@ const FullDocumentEditor: React.FC<FullDocumentEditorProps> = ({ content, onChan
     }
   }, []);
 
-  const handleInsertTextAtCursor = useCallback((text: string) => {
+  const handleInsertTextAtCursor = useCallback((text: string, type?: 'assignee') => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
-    const { selectionStart, selectionEnd } = textarea;
+    const { selectionStart } = textarea;
+
+    if (type === 'assignee') {
+        const textBeforeCursor = content.substring(0, selectionStart);
+        const lineStart = textBeforeCursor.lastIndexOf('\n') + 1;
+        
+        let lineEnd = content.indexOf('\n', selectionStart);
+        if (lineEnd === -1) lineEnd = content.length;
+
+        let currentLine = content.substring(lineStart, lineEnd);
+        
+        const globalAssigneeRegex = /\s\(@([a-zA-Z0-9_]+)\)/g;
+        currentLine = currentLine.replace(globalAssigneeRegex, '');
+
+        const newCurrentLine = currentLine.trimEnd() + ' ' + text;
+
+        const newContent = content.substring(0, lineStart) + newCurrentLine + content.substring(lineEnd);
+        onChange(newContent);
+
+        setTimeout(() => {
+            textarea.focus();
+            const newCursorPos = lineStart + newCurrentLine.length;
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }, 0);
+        return;
+    }
+
+    const { selectionEnd } = textarea;
     const charBefore = selectionStart > 0 ? content[selectionStart - 1] : '\n';
     const spaceBefore = /\s$/.test(charBefore) ? '' : ' ';
     const insertion = `${spaceBefore}${text}`;

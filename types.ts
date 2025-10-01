@@ -26,6 +26,8 @@ export interface Task {
   projectTitle: string;
   cost?: number;
   blockEndLine: number;
+  sectionTitle?: string;
+  sectionSlug?: string;
 }
 
 export interface GroupedTasks {
