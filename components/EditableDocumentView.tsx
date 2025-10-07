@@ -12,10 +12,11 @@ interface EditableDocumentViewProps {
   viewScope: 'single' | 'all';
   currentProjectIndex: number;
   isArchiveView?: boolean;
+  hideCompletedTasks?: boolean;
 }
 
 const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
-  const { markdown, projects, viewScope, currentProjectIndex, isArchiveView } = props;
+  const { markdown, projects, viewScope, currentProjectIndex, isArchiveView, hideCompletedTasks } = props;
   const { users, updateSection, moveSection, duplicateSection, toggleTask, updateTaskBlock, archiveSection, restoreSection } = useProject();
   const sections = useSectionParser(markdown);
 
@@ -108,6 +109,7 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
                             viewScope={viewScope}
                             project={projectForSection}
                             isArchiveView={isArchiveView}
+                            hideCompletedTasks={hideCompletedTasks}
                         />
                     );
                 })}

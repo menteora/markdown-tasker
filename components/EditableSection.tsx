@@ -488,10 +488,11 @@ interface EditableSectionProps {
   viewScope: 'single' | 'all';
   project?: Project;
   isArchiveView?: boolean;
+  hideCompletedTasks?: boolean;
 }
 
 const EditableSection: React.FC<EditableSectionProps> = (props) => {
-  const { section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, onArchiveSection, onRestoreSection, tocHeadings, viewScope, project, isArchiveView } = props;
+  const { section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, onArchiveSection, onRestoreSection, tocHeadings, viewScope, project, isArchiveView, hideCompletedTasks } = props;
   const [isEditing, setIsEditing] = useState(() => !section.content.trim());
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [editedContent, setEditedContent] = useState(section.content);
@@ -937,6 +938,23 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
       
       const taskMatch = line.match(/^- \[( |x)\] (.*)/);
       if (taskMatch) {
+          const isCompleted = taskMatch[1] === 'x';
+          if (!isArchiveView && hideCompletedTasks && isCompleted) {
+              let j = i + 1;
+              while (j < lines.length) {
+                  const updateLine = lines[j];
+                  const updateMatch = updateLine.match(/^  - (\d{4}-\d{2}-\d{2}): (.*)/);
+                  if (updateMatch) {
+                      j++;
+                  } else {
+                      if (updateLine.trim() !== '') break;
+                      j++;
+                  }
+              }
+              i = j;
+              continue;
+          }
+
           let fullTaskText = taskMatch[2]; let assignee: User | null = null; let completionDate: string | null = null; let creationDate: string | null = null; let cost: number | undefined = undefined; let dueDate: string | null = null;
           const dateMatch = fullTaskText.match(/\s~([0-9]{4}-[0-9]{2}-[0-9]{2})/); if (dateMatch) { completionDate = dateMatch[1]; fullTaskText = fullTaskText.replace(dateMatch[0], '').trim(); }
           const costMatch = fullTaskText.match(/\s\(\$(\d+(\.\d{1,2})?)\)/); if (costMatch) { cost = parseFloat(costMatch[1]); fullTaskText = fullTaskText.replace(costMatch[0], '').trim(); }
@@ -979,7 +997,7 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
       i++;
     }
     return elements;
-  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, handleToggleCollapse, isCollapsed, project, viewScope, isArchiveView]);
+  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, handleToggleCollapse, isCollapsed, project, viewScope, isArchiveView, hideCompletedTasks]);
 
   const renderedNodes = useMemo(() => {
     if (isEditing) return null; // Prevent expensive render when editing
