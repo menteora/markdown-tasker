@@ -5,7 +5,7 @@ import UserManagement from './components/UserManagement';
 import ProjectOverview from './components/ProjectOverview';
 import ProjectActions from './components/ProjectActions';
 import type { User, Project, GroupedTasks, Task, Settings, FullProjectState, BackupRecord } from './types';
-import { ChevronsUpDown, Settings as SettingsIcon, Pencil, Archive } from 'lucide-react';
+import { ChevronsUpDown, Settings as SettingsIcon, Pencil, Archive, EyeOff } from 'lucide-react';
 import SettingsModal from './components/SettingsModal';
 import EditableDocumentView from './components/EditableDocumentView';
 import FullDocumentEditor from './components/FullDocumentEditor';
@@ -123,6 +123,7 @@ const App: React.FC = () => {
   const [fullEditContent, setFullEditContent] = useState('');
   const [restoreConfirmation, setRestoreConfirmation] = useState<{ isOpen: boolean; data: FullProjectState | null }>({ isOpen: false, data: null });
   const [scrollToSlug, setScrollToSlug] = useState<string | null>(null);
+  const [hideCompletedTasks, setHideCompletedTasks] = useState(false);
   
   // Cloud state
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
@@ -261,7 +262,27 @@ const App: React.FC = () => {
       return { title: "All Projects", groupedTasks: allGroupedTasks, unassignedTasks: allUnassignedTasks, totalCost };
   }, [projects, users]);
 
-  const dataForOverview = viewScope === 'all' ? aggregatedData : currentProject;
+  const dataForOverview = useMemo(() => {
+    const source = viewScope === 'all' ? aggregatedData : currentProject;
+    if (!hideCompletedTasks) return source;
+
+    // FIX: Add explicit type to lambda parameter to fix 'group' property being inferred as 'unknown'.
+    const filteredGroupedTasks = Object.entries(source.groupedTasks).reduce((acc, [alias, group]: [string, { user: User; tasks: Task[] }]) => {
+        acc[alias] = {
+            ...group,
+            tasks: group.tasks.filter(t => !t.completed)
+        };
+        return acc;
+    }, {} as GroupedTasks);
+
+    const filteredUnassignedTasks = source.unassignedTasks.filter(t => !t.completed);
+
+    return {
+        ...source,
+        groupedTasks: filteredGroupedTasks,
+        unassignedTasks: filteredUnassignedTasks,
+    };
+  }, [viewScope, aggregatedData, currentProject, hideCompletedTasks]);
 
   const tasksForTimeline = useMemo(() => {
     const sourceProjects = viewScope === 'all' ? projects : (currentProject ? [currentProject] : []);
@@ -467,6 +488,7 @@ const App: React.FC = () => {
               viewScope={view === 'archive' ? 'all' : viewScope}
               currentProjectIndex={currentProjectIndex}
               isArchiveView={view === 'archive'}
+              hideCompletedTasks={hideCompletedTasks}
             />
         );
       case 'users':
@@ -548,6 +570,24 @@ const App: React.FC = () => {
               Archive
             </button>
           </nav>
+           { (view === 'overview' || view === 'editor') && !isFullEditMode && view !== 'archive' && (
+            <div className="flex items-center p-1 bg-slate-800 rounded-md border border-slate-700" title="Toggle visibility of completed tasks">
+              <label htmlFor="hide-completed-toggle" className="flex items-center cursor-pointer text-sm font-medium text-slate-300 select-none">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    id="hide-completed-toggle"
+                    className="sr-only"
+                    checked={hideCompletedTasks}
+                    onChange={e => setHideCompletedTasks(e.target.checked)}
+                  />
+                  <div className={`block w-9 h-5 rounded-full transition-colors ${hideCompletedTasks ? 'bg-indigo-600' : 'bg-slate-600'}`}></div>
+                  <div className={`dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform ${hideCompletedTasks ? 'transform translate-x-4' : ''}`}></div>
+                </div>
+                <span className="ml-2 pr-1 flex items-center gap-1.5"><EyeOff className="w-4 h-4" />Hide Completed</span>
+              </label>
+            </div>
+          )}
           {view === 'editor' && !isFullEditMode && (
             <button 
               onClick={handleToggleFullEdit}
