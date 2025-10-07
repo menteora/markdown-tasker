@@ -1,5 +1,5 @@
 {
-  "name": "interactive-markdown-tasker",
+  "name": "markdown-tasker-v2",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -15,7 +15,14 @@
     "jspdf": "^2.5.1",
     "docx": "^8.5.0",
     "file-saver": "^2.0.5",
-    "@supabase/supabase-js": "^2.45.0"
+    "@supabase/supabase-js": "^2.45.0",
+    "remark": "15.0.1",
+    "remark-parse": "11.0.0",
+    "remark-gfm": "4.0.0",
+    "unist-util-visit": "5.0.0",
+    "mdast-util-to-string": "4.0.0",
+    "mdast": "^3.0.0",
+    "remark-stringify": "11.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

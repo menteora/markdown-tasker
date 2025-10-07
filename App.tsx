@@ -1,5 +1,9 @@
 
 
+
+
+
+
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import UserManagement from './components/UserManagement';
 import ProjectOverview from './components/ProjectOverview';
@@ -266,7 +270,6 @@ const App: React.FC = () => {
     const source = viewScope === 'all' ? aggregatedData : currentProject;
     if (!hideCompletedTasks) return source;
 
-    // FIX: Add explicit type to lambda parameter to fix 'group' property being inferred as 'unknown'.
     const filteredGroupedTasks = Object.entries(source.groupedTasks).reduce((acc, [alias, group]: [string, { user: User; tasks: Task[] }]) => {
         acc[alias] = {
             ...group,
@@ -509,10 +512,13 @@ const App: React.FC = () => {
           <TimelineView
             tasks={tasksForTimeline}
             viewScope={viewScope}
+            onNavigate={handleNavigateToSection}
           />
         );
     }
   }
+
+  const isArchive = view === 'archive';
 
   return (
     <div className="h-screen bg-slate-900 text-white font-sans flex flex-col overflow-hidden">
@@ -570,7 +576,7 @@ const App: React.FC = () => {
               Archive
             </button>
           </nav>
-           { (view === 'overview' || view === 'editor') && !isFullEditMode && view !== 'archive' && (
+           {(view === 'overview' || view === 'editor') && !isFullEditMode && (
             <div className="flex items-center p-1 bg-slate-800 rounded-md border border-slate-700" title="Toggle visibility of completed tasks">
               <label htmlFor="hide-completed-toggle" className="flex items-center cursor-pointer text-sm font-medium text-slate-300 select-none">
                 <div className="relative">
@@ -616,11 +622,11 @@ const App: React.FC = () => {
             isAuthenticated={isSupabaseAuthenticated}
             onSignOut={handleSignOut}
           />
-          {view !== 'archive' && 
+          {!isArchive &&
             <ProjectActions
                 viewScope={viewScope}
                 currentProject={currentProject}
-                isArchiveView={view === 'archive'}
+                isArchiveView={isArchive}
             />
           }
         </div>

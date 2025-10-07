@@ -1,8 +1,6 @@
-
-
 import React, { useMemo, useCallback, useState } from 'react';
 import { useSectionParser, Section } from '../hooks/useSectionParser';
-import type { User, Project, Heading } from '../types';
+import type { User, Project, Heading, Task } from '../types';
 import EditableSection from './EditableSection';
 import { useProject } from '../contexts/ProjectContext';
 
@@ -17,7 +15,7 @@ interface EditableDocumentViewProps {
 
 const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
   const { markdown, projects, viewScope, currentProjectIndex, isArchiveView, hideCompletedTasks } = props;
-  const { users, updateSection, moveSection, duplicateSection, toggleTask, updateTaskBlock, archiveSection, restoreSection } = useProject();
+  const { users, updateSection, moveSection, duplicateSection, toggleTask, updateTaskBlock, archiveSection, restoreSection, archiveTasks, reorderTask } = useProject();
   const sections = useSectionParser(markdown);
   const [collapsedSections, setCollapsedSections] = useState<Set<number>>(new Set());
 
@@ -44,13 +42,11 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
         if (collapsedLevel !== null && sectionLevel && sectionLevel > collapsedLevel) {
             isVisible = false;
         } else {
-            // We've reached a section at the same level or higher, so stop collapsing
             collapsedLevel = null;
         }
         
         result.push({ section, isVisible });
 
-        // If the current section is collapsed, mark its level to hide subsequent children
         if (collapsedSections.has(section.startLine) && sectionLevel) {
             collapsedLevel = sectionLevel;
         }
@@ -90,18 +86,14 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
   }, [viewScope, currentProjectIndex, projects, updateSection, isArchiveView]);
 
   const handleToggleTask = useCallback((lineIndex: number, isCompleted: boolean) => {
-    const absoluteLineIndex = (viewScope === 'single' && projects[currentProjectIndex] && !isArchiveView)
-      ? projects[currentProjectIndex].startLine + lineIndex
-      : lineIndex;
-    toggleTask(absoluteLineIndex, isCompleted);
-  }, [viewScope, currentProjectIndex, projects, toggleTask, isArchiveView]);
+    // lineIndex received from InteractiveTaskItem is already absolute
+    toggleTask(lineIndex, isCompleted);
+  }, [toggleTask]);
 
   const handleUpdateTaskBlock = useCallback((startLine: number, lineCount: number, newContent: string) => {
-    const absoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex] && !isArchiveView)
-      ? projects[currentProjectIndex].startLine + startLine
-      : startLine;
-    updateTaskBlock(absoluteStartLine, lineCount, newContent, !!isArchiveView);
-  }, [viewScope, currentProjectIndex, projects, updateTaskBlock, isArchiveView]);
+    // startLine received from InteractiveTaskItem is already an absolute line index
+    updateTaskBlock(startLine, lineCount, newContent, !!isArchiveView);
+  }, [updateTaskBlock, isArchiveView]);
   
   const handleArchiveSection = useCallback((startLine: number, endLine: number, projectTitle: string) => {
       const absoluteStartLine = (viewScope === 'single' && projects[currentProjectIndex]) ? projects[currentProjectIndex].startLine + startLine : startLine;
@@ -109,26 +101,42 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
       archiveSection({ startLine: absoluteStartLine, endLine: absoluteEndLine }, projectTitle);
   }, [viewScope, currentProjectIndex, projects, archiveSection]);
 
-  const handleRestoreSection = useCallback((startLine: number, endLine: number, projectTitle: string) => {
-      // In archive view, startLine is already absolute
-      restoreSection({ startLine, endLine }, projectTitle);
+  const handleRestoreSection = useCallback((startLine: number, endLine: number) => {
+      restoreSection({ startLine, endLine });
   }, [restoreSection]);
+  
+  const handleArchiveTasks = useCallback((tasks: Task[]) => {
+      archiveTasks(tasks);
+  }, [archiveTasks]);
+
+  const handleReorderTask = useCallback((task: Task, direction: 'up' | 'down' | 'top' | 'bottom') => {
+      reorderTask(task, direction);
+  }, [reorderTask]);
 
 
   return (
     <div className="h-full overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            {sections.length === 0 && (
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {isArchiveView && (
+              <div className="mb-8 pb-4 border-b border-slate-700">
+                  <h1 className="text-3xl font-bold text-slate-100">Archive</h1>
+                  <p className="text-slate-400 mt-1">These sections have been archived. You can restore them to merge them back into the active project.</p>
+              </div>
+            )}
+            {(sections.length === 0 || (sections.length === 1 && !sections[0].content.trim())) && (
                 <div className="text-center text-slate-500 py-16">
-                    <h2 className="text-2xl font-semibold">{isArchiveView ? "L'archivio è vuoto" : "Nessun contenuto"}</h2>
-                    <p>{isArchiveView ? "Le sezioni completate e archiviate appariranno qui." : "Inizia aggiungendo del contenuto."}</p>
+                    <h2 className="text-2xl font-semibold">{isArchiveView ? "The Archive is Empty" : "No Content"}</h2>
+                    <p>{isArchiveView ? "Completed and archived sections will appear here." : "Start by adding some content in the editor."}</p>
                 </div>
             )}
             <div className="space-y-4">
                 {processedSections.map(({ section, isVisible }, index) => {
-                    if (!isVisible) return null;
+                    if (!isVisible || !section.content.trim()) return null;
                     
-                    const projectForSection = projects.find(p => section.startLine >= p.startLine && section.startLine <= p.endLine);
+                    const projectForSection = (viewScope === 'single' && projects[currentProjectIndex] && !isArchiveView)
+                      ? projects[currentProjectIndex]
+                      : projects.find(p => section.startLine >= p.startLine && section.startLine <= p.endLine);
+                    
                     const tocHeadings = projectForSection?.headings;
 
                     return (
@@ -144,10 +152,13 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
                             onUpdateTaskBlock={handleUpdateTaskBlock}
                             onArchiveSection={handleArchiveSection}
                             onRestoreSection={handleRestoreSection}
+                            onArchiveTasks={handleArchiveTasks}
+                            onReorderTask={handleReorderTask}
                             tocHeadings={tocHeadings}
                             users={users}
                             viewScope={viewScope}
                             project={projectForSection}
+                            projectStartLine={projectStartLine}
                             isArchiveView={isArchiveView}
                             hideCompletedTasks={hideCompletedTasks}
                             isCollapsed={collapsedSections.has(section.startLine)}

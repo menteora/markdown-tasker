@@ -1,8 +1,8 @@
+
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
 import type { FullProjectState, BackupRecord } from '../types';
 
 let supabase: SupabaseClient | null = null;
-// FIX: Cache the supabase URL to avoid accessing a protected property on the client.
 let supabaseUrlCache: string | null = null;
 
 export const getSupabaseClient = (url: string, anonKey: string): SupabaseClient => {

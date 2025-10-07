@@ -1,17 +1,16 @@
-
-
-
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { User, TaskUpdate, Task, Heading, Project } from '../types';
 import { Section } from '../hooks/useSectionParser';
 import Toolbar from './Toolbar';
-import { Pencil, Save, X, CheckCircle2, CalendarDays, ChevronRight, ChevronDown, Archive, ArchiveRestore } from 'lucide-react';
+import { Pencil, Save, X, ChevronRight, ChevronDown, Archive, ArchiveRestore } from 'lucide-react';
 import InputModal from './InputModal';
 import DatePickerModal from './DatePickerModal';
 import MoveSectionControl from './MoveSectionControl';
 import DuplicateSectionControl from './DuplicateSectionControl';
 import TableOfContents from './TableOfContents';
 import ConfirmationModal from './ConfirmationModal';
+import { useProject } from '../contexts/ProjectContext';
+import InteractiveTaskItem from './InteractiveTaskItem';
 
 // Autocomplete Component for @ mentions
 interface MentionAutocompleteProps {
@@ -76,400 +75,6 @@ const parseInlineMarkdown = (text: string): React.ReactNode[] => {
 
 const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => <>{parseInlineMarkdown(text)}</>;
 
-// InteractiveTaskItem Component
-const InteractiveTaskItem: React.FC<{
-  task: Task;
-  taskBlockContent: string;
-  blockLineCount: number;
-  absoluteStartLine: number;
-  onToggle: (absoluteLineIndex: number, isCompleted: boolean) => void;
-  onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
-  users: User[];
-  isArchiveView?: boolean;
-}> = ({ task, taskBlockContent, blockLineCount, absoluteStartLine, onToggle, onUpdateTaskBlock, users, isArchiveView }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(taskBlockContent);
-  const [areUpdatesVisible, setAreUpdatesVisible] = useState(false);
-  const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
-  const assignee = task.assigneeAlias ? userByAlias.get(task.assigneeAlias) : null;
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
-  const [isInputModalOpen, setIsInputModalOpen] = useState(false);
-  const [inputModalConfig, setInputModalConfig] = useState<{
-      onSubmit: (value: string) => void;
-      title: string;
-      label: string;
-      confirmText: string;
-  } | null>(null);
-  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-
-  useEffect(() => {
-    if (!isEditing) {
-      setEditedContent(taskBlockContent);
-    }
-  }, [taskBlockContent, isEditing]);
-
-  useEffect(() => {
-    if (isEditing && textareaRef.current) {
-        const end = textareaRef.current.value.length;
-        textareaRef.current.focus();
-        textareaRef.current.setSelectionRange(end, end);
-    }
-  }, [isEditing]);
-
-  useEffect(() => {
-    if (isEditing && textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, [isEditing, editedContent]);
-
-  const handleSave = () => {
-    onUpdateTaskBlock(absoluteStartLine, blockLineCount, editedContent);
-    setIsEditing(false);
-  };
-
-  const handleCancel = () => {
-    setEditedContent(taskBlockContent);
-    setIsEditing(false);
-  };
-  
-  const handleInsertTextAtCursor = useCallback((text: string, type?: 'assignee') => {
-        const textarea = textareaRef.current;
-        if (!textarea) return;
-
-        const { selectionStart } = textarea;
-
-        if (type === 'assignee') {
-            const textBeforeCursor = editedContent.substring(0, selectionStart);
-            const lineStart = textBeforeCursor.lastIndexOf('\n') + 1;
-            
-            let lineEnd = editedContent.indexOf('\n', selectionStart);
-            if (lineEnd === -1) lineEnd = editedContent.length;
-
-            let currentLine = editedContent.substring(lineStart, lineEnd);
-            
-            const globalAssigneeRegex = /\s\(@([a-zA-Z0-9_]+)\)/g;
-            currentLine = currentLine.replace(globalAssigneeRegex, '');
-
-            const newCurrentLine = currentLine.trimEnd() + ' ' + text;
-
-            const newContent = editedContent.substring(0, lineStart) + newCurrentLine + editedContent.substring(lineEnd);
-            setEditedContent(newContent);
-
-            setTimeout(() => {
-                textarea.focus();
-                const newCursorPos = lineStart + newCurrentLine.length;
-                textarea.setSelectionRange(newCursorPos, newCursorPos);
-            }, 0);
-            return;
-        }
-
-        const { selectionEnd } = textarea;
-        const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
-        const spaceBefore = /\s$/.test(charBefore) ? '' : ' ';
-        const insertion = `${spaceBefore}${text}`;
-        
-        const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
-        
-        setEditedContent(newText);
-        
-        setTimeout(() => {
-            textarea.focus();
-            const newCursorPos = selectionStart + insertion.length;
-            textarea.setSelectionRange(newCursorPos, newCursorPos);
-        }, 0);
-    }, [editedContent]);
-
-      const handleDateSelect = useCallback((date: string) => {
-        const textarea = textareaRef.current;
-        if (!textarea) return;
-
-        const { selectionStart, selectionEnd } = textarea;
-        const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
-        const spaceBefore = /\s$/.test(charBefore) ? '' : ' ';
-        const insertion = `${spaceBefore}!${date}`;
-
-        const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
-        setEditedContent(newText);
-        
-        setTimeout(() => {
-            textarea.focus();
-            const newCursorPos = selectionStart + insertion.length;
-            textarea.setSelectionRange(newCursorPos, newCursorPos);
-        }, 0);
-    }, [editedContent]);
-
-
-  const handleFormat = useCallback((type: 'bold' | 'italic' | 'link' | 'gmail' | 'h1' | 'h2' | 'h3' | 'ul' | 'task' | 'update' | 'dueDate') => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    
-    const { selectionStart, selectionEnd } = textarea;
-    const selectedText = editedContent.substring(selectionStart, selectionEnd);
-    
-    if (type === 'link') {
-        setInputModalConfig({
-            title: 'Insert Link',
-            label: 'Enter the URL:',
-            confirmText: 'Insert Link',
-            onSubmit: (url) => {
-                const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
-                const charAfter = selectionEnd < editedContent.length ? editedContent[selectionEnd] : '\n';
-                const spaceBefore = /^\s$/.test(charBefore) ? '' : ' ';
-                const spaceAfter = /^\s$/.test(charAfter) ? '' : ' ';
-                
-                const linkText = selectedText || '🔗';
-                const safeUrl = url.replace(/\(/g, '%28').replace(/\)/g, '%29');
-                const insertion = spaceBefore + `[${linkText}](${safeUrl})` + spaceAfter;
-                const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
-                setEditedContent(newText);
-
-                setTimeout(() => {
-                    if (textareaRef.current) {
-                        textareaRef.current.focus();
-                        const selStart = selectionStart + spaceBefore.length + 1;
-                        const selEnd = selStart + linkText.length;
-                        textareaRef.current.setSelectionRange(selStart, selEnd);
-                    }
-                }, 0);
-            }
-        });
-        setIsInputModalOpen(true);
-        return;
-    }
-
-    if (type === 'gmail') {
-        setInputModalConfig({
-            title: 'Insert Gmail Link',
-            label: 'Enter the email subject:',
-            confirmText: 'Create Link',
-            onSubmit: (subject) => {
-                const charBefore = selectionStart > 0 ? editedContent[selectionStart - 1] : '\n';
-                const charAfter = selectionEnd < editedContent.length ? editedContent[selectionEnd] : '\n';
-                const spaceBefore = /^\s$/.test(charBefore) ? '' : ' ';
-                const spaceAfter = /^\s$/.test(charAfter) ? '' : ' ';
-
-                const encodedQuery = encodeURIComponent(`subject:"${subject}"`);
-                const searchUrl = `https://mail.google.com/mail/u/0/#search/${encodedQuery}`;
-                const safeSearchUrl = searchUrl.replace(/\(/g, '%28').replace(/\)/g, '%29');
-                const insertion = spaceBefore + `[📨 ${subject}](${safeSearchUrl})` + spaceAfter;
-                const newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
-                setEditedContent(newText);
-
-                setTimeout(() => {
-                    if (textareaRef.current) {
-                        textareaRef.current.focus();
-                        const newCursorPos = selectionStart + insertion.length;
-                        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
-                    }
-                }, 0);
-            }
-        });
-        setIsInputModalOpen(true);
-        return;
-    }
-    
-    if (type === 'dueDate') {
-        setIsDatePickerOpen(true);
-        return;
-    }
-
-
-    let prefix = '';
-    let suffix = '';
-    let insertion = '';
-    let newCursorPos = -1;
-    let newText;
-    
-    switch (type) {
-        case 'h1': prefix = '# '; break;
-        case 'h2': prefix = '## '; break;
-        case 'h3': prefix = '### '; break;
-        case 'bold': prefix = '**'; suffix = '**'; break;
-        case 'italic': prefix = '*'; suffix = '*'; break;
-        case 'ul': prefix = '- '; break;
-        case 'task': {
-            const today = new Date().toISOString().split('T')[0];
-            if (selectionStart !== selectionEnd) { // Multi-line selection
-                const newLines = selectedText.split('\n').map(line => {
-                    if (line.trim() === '') return line;
-                    if (line.trim().match(/^[-*] \[( |x)\]/)) return line;
-                    return `- [ ] ${line.trim()} +${today}`;
-                }).join('\n');
-                
-                newText = editedContent.substring(0, selectionStart) + newLines + editedContent.substring(selectionEnd);
-                setEditedContent(newText);
-                setTimeout(() => {
-                    if (textareaRef.current) {
-                        textareaRef.current.focus();
-                        textareaRef.current.setSelectionRange(selectionStart + newLines.length, selectionStart + newLines.length);
-                    }
-                }, 0);
-                return;
-            } else { // Single-line insertion
-                const textBeforeCursor = editedContent.substring(0, selectionStart);
-                const atEndOfNonEmptyLine = selectionStart > 0 && editedContent[selectionStart - 1] !== '\n';
-                prefix = (atEndOfNonEmptyLine ? '\n' : '') + '- [ ] ';
-                suffix = ` +${today}`;
-            }
-            break;
-        }
-        case 'update': {
-            const today = new Date().toISOString().split('T')[0];
-            const textBeforeCursor = editedContent.substring(0, selectionStart);
-            const atStartOfLine = selectionStart === 0 || textBeforeCursor.endsWith('\n');
-            insertion = `${atStartOfLine ? '' : '\n'}  - ${today}: `;
-            newCursorPos = selectionStart + insertion.length;
-            break;
-        }
-    }
-
-    if (insertion) {
-        newText = editedContent.substring(0, selectionStart) + insertion + editedContent.substring(selectionEnd);
-    } else {
-        newText = editedContent.substring(0, selectionStart) + prefix + selectedText + suffix + editedContent.substring(selectionEnd);
-    }
-
-    setEditedContent(newText);
-    
-    setTimeout(() => {
-        if (textareaRef.current) {
-            textareaRef.current.focus();
-            if (newCursorPos !== -1) {
-                textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
-            } else if (selectedText.length === 0) {
-                 const cursorPos = selectionStart + prefix.length;
-                textareaRef.current.setSelectionRange(cursorPos, cursorPos);
-            } else {
-                 textareaRef.current.setSelectionRange(selectionStart + prefix.length, selectionEnd + prefix.length);
-            }
-        }
-    }, 0);
-
-  }, [editedContent]);
-
-
-  const getDueDateInfo = (dateString: string | null, isCompleted: boolean): { pillColor: string; label: string } | null => {
-      if (!dateString || isCompleted) return null;
-      const today = new Date(); today.setHours(0, 0, 0, 0); const due = new Date(`${dateString}T00:00:00`);
-      const diffTime = due.getTime() - today.getTime(); const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (diffDays < 0) return { pillColor: 'bg-red-500/20 text-red-400', label: `Overdue` };
-      if (diffDays === 0) return { pillColor: 'bg-yellow-500/20 text-yellow-400', label: 'Due today' };
-      return { pillColor: 'bg-slate-700/50 text-slate-300', label: `Due in ${diffDays} day(s)` };
-  };
-  const dueDateInfo = getDueDateInfo(task.dueDate, task.completed);
-  
-  if (isEditing) {
-    return (
-      <>
-        <div className="py-2 border-b border-indigo-500/30 bg-slate-800/30 rounded-lg p-3 my-2">
-          <div className="mb-2">
-            <Toolbar onFormat={handleFormat} onInsert={handleInsertTextAtCursor} users={users} />
-          </div>
-          <textarea
-            ref={textareaRef}
-            value={editedContent}
-            onChange={(e) => setEditedContent(e.target.value)}
-            className="w-full p-2 bg-slate-900 border border-slate-700 rounded-md resize-y focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm leading-relaxed"
-            autoFocus
-          />
-          <div className="flex justify-end items-center mt-2 space-x-2">
-            <button onClick={handleCancel} className="px-3 py-1 rounded-md bg-slate-600 hover:bg-slate-500 font-semibold text-sm flex items-center space-x-2"><X className="w-4 h-4"/><span>Cancel</span></button>
-            <button onClick={handleSave} className="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 font-semibold text-sm flex items-center space-x-2"><Save className="w-4 h-4"/><span>Save</span></button>
-          </div>
-        </div>
-        {isInputModalOpen && inputModalConfig && (
-            <InputModal
-                isOpen={isInputModalOpen}
-                onClose={() => setIsInputModalOpen(false)}
-                onSubmit={inputModalConfig.onSubmit}
-                title={inputModalConfig.title}
-                label={inputModalConfig.label}
-                confirmText={inputModalConfig.confirmText}
-            />
-        )}
-        <DatePickerModal
-            isOpen={isDatePickerOpen}
-            onClose={() => setIsDatePickerOpen(false)}
-            onSelectDate={handleDateSelect}
-            title="Select Due Date"
-            confirmText="Insert Date"
-        />
-      </>
-    );
-  }
-
-  return (
-    <div className="py-2 border-b border-slate-800">
-        <div className="flex items-start space-x-3 group">
-            <input type="checkbox" checked={task.completed} onChange={(e) => onToggle(absoluteStartLine, e.target.checked)} className="h-5 w-5 rounded-md bg-slate-700 border-slate-600 text-indigo-500 focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 cursor-pointer flex-shrink-0 mt-1" disabled={isArchiveView}/>
-            <div className="flex-grow min-w-0">
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    <span className={`leading-snug ${task.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-                      <InlineMarkdown text={task.text} />
-                    </span>
-                    {assignee && (
-                      <div className="inline-flex items-center space-x-1.5 bg-slate-700/60 text-slate-300 px-1.5 py-0.5 rounded-full text-xs whitespace-nowrap" title={`Assigned to ${assignee.name}`}>
-                        <img src={assignee.avatarUrl} alt={assignee.name} className="h-4 w-4 rounded-full" />
-                        <span>{assignee.name}</span>
-                      </div>
-                    )}
-                    {dueDateInfo && (
-                      <div className={`inline-flex items-center space-x-1 px-1.5 py-0.5 rounded-full text-xs whitespace-nowrap ${dueDateInfo.pillColor}`} title={dueDateInfo.label}>
-                        <CalendarDays className="w-3 h-3" />
-                        <span>{task.dueDate}</span>
-                      </div>
-                    )}
-                     {task.cost !== undefined && (
-                      <span className="inline-flex items-center font-semibold bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full text-xs whitespace-nowrap">
-                        ${task.cost.toFixed(2)}
-                      </span>
-                    )}
-                    {task.completionDate && task.completed && (
-                      <div className="inline-flex items-center space-x-1 bg-slate-700/60 text-slate-400 px-1.5 py-0.5 rounded-full text-xs whitespace-nowrap" title={`Completed on ${task.completionDate}`}>
-                        <CheckCircle2 className="w-3 h-3 text-green-500" />
-                        <span>{task.completionDate}</span>
-                      </div>
-                    )}
-                </div>
-            </div>
-            <button onClick={() => setIsEditing(true)} className="p-2 rounded-full hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" title="Edit task and updates">
-              <Pencil className="w-4 h-4" />
-            </button>
-        </div>
-        {task.updates.length > 0 && (
-            <>
-                <div className="pl-8 mt-2">
-                    <button
-                        onClick={() => setAreUpdatesVisible(v => !v)}
-                        className="flex items-center text-xs text-slate-400 hover:text-indigo-300 transition-colors py-1 rounded"
-                        aria-expanded={areUpdatesVisible}
-                        aria-controls={`updates-${task.lineIndex}`}
-                    >
-                        <ChevronRight className={`w-4 h-4 mr-1 transition-transform ${areUpdatesVisible ? 'rotate-90' : ''}`} />
-                        <span className="font-medium">{task.updates.length} update{task.updates.length > 1 ? 's' : ''}</span>
-                    </button>
-                </div>
-                {areUpdatesVisible && (
-                    <div id={`updates-${task.lineIndex}`} className="pl-8 mt-2 space-y-2 border-l-2 border-slate-800 ml-2.5">
-                        {task.updates.map(update => {
-                            const updateAssignee = update.assigneeAlias ? userByAlias.get(update.assigneeAlias) : null;
-                            return (
-                                <div key={update.lineIndex} className="flex items-center space-x-2 text-sm text-slate-400 w-full group">
-                                    {updateAssignee ? <img src={updateAssignee.avatarUrl} title={updateAssignee.name} className="w-5 h-5 rounded-full flex-shrink-0" alt={updateAssignee.name} /> : <div className="w-5 h-5 flex-shrink-0" />}
-                                    <span className="font-mono text-slate-500 whitespace-nowrap">{update.date}:</span>
-                                    <p className="flex-grow min-w-0"><InlineMarkdown text={update.text} /></p>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </>
-        )}
-    </div>
-  );
-};
 
 // The Main EditableSection Component
 interface EditableSectionProps {
@@ -483,10 +88,13 @@ interface EditableSectionProps {
   onToggle: (lineIndex: number, isCompleted: boolean) => void;
   onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
   onArchiveSection: (startLine: number, endLine: number, projectTitle: string) => void;
-  onRestoreSection: (startLine: number, endLine: number, projectTitle: string) => void;
+  onRestoreSection: (startLine: number, endLine: number) => void;
+  onArchiveTasks: (tasks: Task[]) => void;
+  onReorderTask: (task: Task, direction: 'up' | 'down' | 'top' | 'bottom') => void;
   tocHeadings?: Heading[];
   viewScope: 'single' | 'all';
   project?: Project;
+  projectStartLine: number;
   isArchiveView?: boolean;
   hideCompletedTasks?: boolean;
   isCollapsed: boolean;
@@ -494,7 +102,8 @@ interface EditableSectionProps {
 }
 
 const EditableSection: React.FC<EditableSectionProps> = (props) => {
-  const { section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, onArchiveSection, onRestoreSection, tocHeadings, viewScope, project, isArchiveView, hideCompletedTasks, isCollapsed, onToggleCollapse } = props;
+  const { section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, onArchiveSection, onRestoreSection, tocHeadings, viewScope, project, projectStartLine, isArchiveView, hideCompletedTasks, isCollapsed, onToggleCollapse, onArchiveTasks, onReorderTask } = props;
+  const { markdown } = useProject();
   const [isEditing, setIsEditing] = useState(() => !section.content.trim());
   const [editedContent, setEditedContent] = useState(section.content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -518,14 +127,23 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
   const [filteredMentionUsers, setFilteredMentionUsers] = useState<User[]>([]);
   const [activeMentionIndex, setActiveMentionIndex] = useState(0);
 
-  const isArchivable = useMemo(() => {
-    if (isArchiveView) return false;
-    const taskRegex = /^- \[([ x])\] .*/;
-    const lines = section.content.split('\n');
-    const tasks = lines.map(line => line.match(taskRegex)).filter((match): match is RegExpMatchArray => !!match);
-    if (tasks.length === 0) return false;
-    return tasks.every(taskMatch => taskMatch[1] === 'x');
-  }, [section.content, isArchiveView]);
+  const completedTasksInSection = useMemo(() => {
+    if (!project || isArchiveView) return [];
+    
+    const allProjectTasks = [
+        ...project.unassignedTasks,
+        ...Object.values(project.groupedTasks).flatMap((g) => g.tasks)
+    ];
+
+    const sectionAbsoluteStart = projectStartLine + section.startLine;
+    const sectionAbsoluteEnd = projectStartLine + section.endLine;
+
+    return allProjectTasks.filter(task => 
+        task.completed &&
+        task.lineIndex >= sectionAbsoluteStart &&
+        task.lineIndex <= sectionAbsoluteEnd
+    );
+  }, [project, section.startLine, section.endLine, isArchiveView, projectStartLine]);
 
   useEffect(() => {
     setEditedContent(section.content);
@@ -571,9 +189,7 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
   };
   
   const handleConfirmRestore = () => {
-      if (project) {
-        onRestoreSection(section.startLine, section.endLine, project.title);
-      }
+      onRestoreSection(section.startLine, section.endLine);
       setIsRestoreConfirmOpen(false);
   }
 
@@ -831,8 +447,8 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
         case 'update': {
             const today = new Date().toISOString().split('T')[0];
             const textBeforeCursor = editedContent.substring(0, selectionStart);
-            const atStartOfLine = selectionStart === 0 || textBeforeCursor.endsWith('\n');
-            insertion = `${atStartOfLine ? '' : '\n'}  - ${today}: `;
+            const needsNewline = selectionStart > 0 && !textBeforeCursor.endsWith('\n');
+            insertion = `${needsNewline ? '\n' : ''}  - ${today}: `;
             newCursorPos = selectionStart + insertion.length;
             break;
         }
@@ -866,175 +482,211 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
     const lines = section.content.split('\n');
     const elements: React.ReactNode[] = [];
     let i = 0;
+  
+    const findFullTaskBlock = (startIndex: number): { task: Task | null; endIndex: number } => {
+        const line = lines[startIndex];
+        const taskMatch = line.match(/^- \[( |x)\] (.*)/);
+        if (!taskMatch) return { task: null, endIndex: startIndex };
+
+        let fullTaskText = taskMatch[2];
+        let assignee: User | null = null;
+        let completionDate: string | null = null;
+        let creationDate: string | null = null;
+        let cost: number | undefined = undefined;
+        let dueDate: string | null = null;
+        let headingHierarchy: { text: string; level: number }[] = [];
+
+        const projectForTask = project;
+        if (projectForTask) {
+            const absoluteLineIndex = projectStartLine + section.startLine + startIndex;
+            const taskFromContext = [...projectForTask.unassignedTasks, ...Object.values(projectForTask.groupedTasks).flatMap(g => g.tasks)].find(t => t.lineIndex === absoluteLineIndex);
+            if (taskFromContext) {
+                 assignee = taskFromContext.assigneeAlias ? userByAlias.get(taskFromContext.assigneeAlias) ?? null : null;
+                 completionDate = taskFromContext.completionDate;
+                 creationDate = taskFromContext.creationDate ?? null;
+                 cost = taskFromContext.cost;
+                 dueDate = taskFromContext.dueDate ?? null;
+                 headingHierarchy = taskFromContext.headingHierarchy;
+                 fullTaskText = taskFromContext.text;
+            }
+        }
+        
+        const updates: TaskUpdate[] = [];
+        let j = startIndex + 1;
+        while (j < lines.length) {
+            const updateLine = lines[j];
+            const updateMatch = updateLine.match(/^  - (\d{4}-\d{2}-\d{2}): (.*)/);
+            if (updateMatch) {
+                let updateText = updateMatch[2].trim();
+                let updateAssigneeAlias: string | null = null;
+                const updateAssigneeMatch = updateText.match(/\s\(@([a-zA-Z0-9_]+)\)/);
+                if (updateAssigneeMatch) {
+                    updateAssigneeAlias = updateAssigneeMatch[1];
+                    updateText = updateText.replace(updateAssigneeMatch[0], '').trim();
+                }
+                updates.push({
+                    lineIndex: section.startLine + j,
+                    date: updateMatch[1],
+                    text: updateText,
+                    assigneeAlias: updateAssigneeAlias,
+                });
+                j++;
+            } else if (updateLine.trim() === '') {
+                 j++;
+            } else {
+                break;
+            }
+        }
+        
+        const absoluteLineIndex = projectStartLine + section.startLine + startIndex;
+        const task: Task = {
+            lineIndex: absoluteLineIndex,
+            text: fullTaskText,
+            completed: taskMatch[1] === 'x',
+            assigneeAlias: assignee?.alias ?? null,
+            creationDate,
+            completionDate,
+            dueDate,
+            updates,
+            projectTitle: project?.title ?? '',
+            cost,
+            blockEndLine: absoluteLineIndex + (j - 1 - startIndex),
+            headingHierarchy,
+        };
+        return { task, endIndex: j };
+    };
+  
     while (i < lines.length) {
-      const line = lines[i];
-      const relativeLineIndex = section.startLine + i;
-      const absoluteLineIndex = (project?.startLine ?? 0) + relativeLineIndex;
-      
-      const archiveDateMatch = line.match(/^_Archived on: (.*)_/);
-      if (isArchiveView && archiveDateMatch) {
-          elements.push(
-              <blockquote key={`archive-date-${i}`} className="border-l-4 border-slate-600 pl-4 py-2 my-4 text-slate-400 italic">
-                  Archived on: {archiveDateMatch[1]}
-              </blockquote>
-          );
-          i++;
-          continue;
-      }
+        const line = lines[i];
+        const relativeLineIndex = section.startLine + i;
+        const absoluteLineIndex = (project?.startLine ?? 0) + relativeLineIndex;
+  
+        const isTaskLine = line.match(/^- \[( |x)\] .*/);
+        if (isTaskLine) {
+            const taskList: Task[] = [];
+            let currentParseIndex = i;
+            while (currentParseIndex < lines.length) {
+                const { task, endIndex } = findFullTaskBlock(currentParseIndex);
+                if (task) {
+                    if (hideCompletedTasks && task.completed && !isArchiveView) {
+                    } else {
+                       taskList.push(task);
+                    }
+                    currentParseIndex = endIndex;
+                } else {
+                    break;
+                }
+            }
+            
+            taskList.forEach((task, taskIndex) => {
+                const blockLineCount = task.blockEndLine - task.lineIndex + 1;
+                const taskBlockContent = markdown.split('\n').slice(task.lineIndex, task.lineIndex + blockLineCount).join('\n');
 
-      const hMatch = line.match(/^(#+) (.*)/);
-      if (hMatch && i === 0 && section.heading) { // This is the main section heading.
-          const level = hMatch[1].length;
-          const text = hMatch[2].trim();
-          const headingData = tocHeadingsForSlugs?.find(h => h.line === (viewScope === 'single' && !isArchiveView ? relativeLineIndex + project.startLine : relativeLineIndex));
-          
-          let headingClassName: string;
-          let buttonClassName = "font-bold flex items-center w-full text-left transition-colors hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded p-1 -ml-1";
-          
-          switch(level) {
-              case 1: 
-                  headingClassName = "text-3xl mt-6 mb-3 pb-2 border-b border-slate-700 scroll-mt-20";
-                  break;
-              case 2:
-                  headingClassName = "text-2xl mt-5 mb-2 scroll-mt-20";
-                  break;
-              case 3:
-              default:
-                  headingClassName = "text-xl mt-4 mb-1 scroll-mt-20";
-                  break;
-          }
+                elements.push(
+                    <InteractiveTaskItem 
+                        key={task.lineIndex} 
+                        task={task}
+                        taskBlockContent={taskBlockContent}
+                        onToggle={props.onToggle}
+                        onUpdateTaskBlock={props.onUpdateTaskBlock}
+                        users={props.users} 
+                        isArchiveView={isArchiveView}
+                        onArchiveTask={(taskToArchive) => onArchiveTasks([taskToArchive])}
+                        onReorderTask={onReorderTask}
+                        taskIndexInList={taskIndex}
+                        totalTasksInList={taskList.length}
+                    />
+                );
+            });
 
-          // FIX: Use React.createElement for dynamic heading tag to resolve JSX namespace and type errors.
-          const HeadingTag = `h${level}`;
+            i = currentParseIndex;
+            continue;
+        }
 
-          elements.push(
-              React.createElement(
-                HeadingTag,
-                { key: i, id: headingData?.slug, className: headingClassName },
+        const archiveDateMatch = line.match(/^_Archived on: (.*)_/);
+        if (isArchiveView && archiveDateMatch) {
+            elements.push(<blockquote key={`archive-date-${i}`} className="border-l-4 border-slate-600 pl-4 py-2 my-4 text-slate-400 italic">Archived on: {archiveDateMatch[1]}</blockquote>);
+            i++; continue;
+        }
+  
+        const hMatch = line.match(/^(#+) (.*)/);
+        if (hMatch && i === 0 && section.heading) {
+            const level = hMatch[1].length;
+            const text = hMatch[2].trim();
+            const headingData = tocHeadingsForSlugs?.find(h => h.line === (viewScope === 'single' && !isArchiveView ? relativeLineIndex + project.startLine : relativeLineIndex));
+            
+            let headingClassName: string;
+            let buttonClassName = "font-bold flex items-center w-full text-left transition-colors hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded p-1 -ml-1";
+            
+            switch(level) {
+                case 1: headingClassName = "text-3xl mt-6 mb-3 pb-2 border-b border-slate-700 scroll-mt-20"; break;
+                case 2: headingClassName = "text-2xl mt-5 mb-2 scroll-mt-20"; break;
+                case 3: default: headingClassName = "text-xl mt-4 mb-1 scroll-mt-20"; break;
+            }
+  
+            const HeadingTag = `h${level}`;
+            elements.push(React.createElement(HeadingTag, { key: i, id: headingData?.slug, className: headingClassName },
                 <button className={buttonClassName} onClick={onToggleCollapse} aria-expanded={!isCollapsed} aria-controls={`section-content-${section.startLine}`}>
                     {isCollapsed ? <ChevronRight className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" /> : <ChevronDown className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" />}
                     <span className="flex-grow"><InlineMarkdown text={text} /></span>
                 </button>
-              )
-          );
-          i++;
-          continue;
-      } else if (hMatch) {
-          const level = hMatch[1].length;
-          const text = hMatch[2].trim();
-          const headingData = tocHeadingsForSlugs?.find(h => h.line === absoluteLineIndex);
-          let className = "font-bold scroll-mt-20 ";
-          if (level === 1) className += "text-3xl mt-6 mb-3 pb-2 border-b border-slate-700";
-          else if (level === 2) className += "text-2xl mt-5 mb-2";
-          else if (level === 3) className += "text-xl mt-4 mb-1";
-          elements.push(React.createElement(`h${level}`, { key: i, className, id: headingData?.slug }, <InlineMarkdown text={text} />));
-          i++; continue;
-      }
-      
-      const taskMatch = line.match(/^- \[( |x)\] (.*)/);
-      if (taskMatch) {
-          const isCompleted = taskMatch[1] === 'x';
-          if (!isArchiveView && hideCompletedTasks && isCompleted) {
-              let j = i + 1;
-              while (j < lines.length) {
-                  const updateLine = lines[j];
-                  const updateMatch = updateLine.match(/^  - (\d{4}-\d{2}-\d{2}): (.*)/);
-                  if (updateMatch) {
-                      j++;
-                  } else {
-                      if (updateLine.trim() !== '') break;
-                      j++;
-                  }
-              }
-              i = j;
-              continue;
-          }
-
-          let fullTaskText = taskMatch[2]; let assignee: User | null = null; let completionDate: string | null = null; let creationDate: string | null = null; let cost: number | undefined = undefined; let dueDate: string | null = null;
-          const dateMatch = fullTaskText.match(/\s~([0-9]{4}-[0-9]{2}-[0-9]{2})/); if (dateMatch) { completionDate = dateMatch[1]; fullTaskText = fullTaskText.replace(dateMatch[0], '').trim(); }
-          const costMatch = fullTaskText.match(/\s\(\$(\d+(\.\d{1,2})?)\)/); if (costMatch) { cost = parseFloat(costMatch[1]); fullTaskText = fullTaskText.replace(costMatch[0], '').trim(); }
-          const assigneeMatch = fullTaskText.match(/\s\(@([a-zA-Z0-9_]+)\)/); if (assigneeMatch) { assignee = userByAlias.get(assigneeMatch[1]) || null; fullTaskText = fullTaskText.replace(assigneeMatch[0], '').trim(); }
-          const creationDateMatch = fullTaskText.match(/\s\+([0-9]{4}-[0-9]{2}-[0-9]{2})/); if (creationDateMatch) { creationDate = creationDateMatch[1]; fullTaskText = fullTaskText.replace(creationDateMatch[0], '').trim(); }
-          const dueDateMatch = fullTaskText.match(/\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/); if (dueDateMatch) { dueDate = dueDateMatch[1]; fullTaskText = fullTaskText.replace(dueDateMatch[0], '').trim(); }
-          const updates: TaskUpdate[] = []; let j = i + 1;
-          while (j < lines.length) {
-              const updateLine = lines[j]; const updateMatch = updateLine.match(/^  - (\d{4}-\d{2}-\d{2}): (.*)/);
-              if (updateMatch) {
-                  let updateText = updateMatch[2].trim(); let updateAssigneeAlias: string | null = null;
-                  const updateAssigneeMatch = updateText.match(/\s\(@([a-zA-Z0-9_]+)\)/); if(updateAssigneeMatch){ updateAssigneeAlias = updateAssigneeMatch[1]; updateText = updateText.replace(updateAssigneeMatch[0], '').trim(); }
-                  updates.push({ lineIndex: section.startLine + j, date: updateMatch[1], text: updateText, assigneeAlias: updateAssigneeAlias }); j++;
-              } else { if (updateLine.trim() !== '') break; j++; }
-          }
-          const task: Task = {
-            lineIndex: relativeLineIndex, text: fullTaskText, completed: taskMatch[1] === 'x', assigneeAlias: assignee?.alias ?? null,
-            creationDate, completionDate, dueDate, updates, projectTitle: '', cost, blockEndLine: section.startLine + j - 1,
-          };
-
-          elements.push(
-            <InteractiveTaskItem 
-                key={i} 
-                task={task}
-                taskBlockContent={lines.slice(i, j).join('\n')}
-                blockLineCount={j - i}
-                absoluteStartLine={relativeLineIndex}
-                onToggle={props.onToggle}
-                onUpdateTaskBlock={props.onUpdateTaskBlock}
-                users={props.users} 
-                isArchiveView={isArchiveView}
-            />
-          );
-          i = j; continue;
-      }
-      
-      const ulMatch = line.match(/^[-*] (.*)/); if (ulMatch) elements.push(<li key={i} className="ml-6 list-disc text-slate-300"><InlineMarkdown text={ulMatch[1]} /></li>);
-      else if (line.trim() === '') elements.push(<div key={i} className="h-4"></div>);
-      else elements.push(<p key={i} className="text-slate-300 my-2 leading-relaxed"><InlineMarkdown text={line} /></p>);
-      i++;
+            ));
+            i++; continue;
+        } else if (hMatch) {
+            const level = hMatch[1].length;
+            const text = hMatch[2].trim();
+            const headingData = tocHeadingsForSlugs?.find(h => h.line === absoluteLineIndex);
+            let className = "font-bold scroll-mt-20 ";
+            if (level === 1) className += "text-3xl mt-6 mb-3 pb-2 border-b border-slate-700";
+            else if (level === 2) className += "text-2xl mt-5 mb-2";
+            else if (level === 3) className += "text-xl mt-4 mb-1";
+            elements.push(React.createElement(`h${level}`, { key: i, className, id: headingData?.slug }, <InlineMarkdown text={text} />));
+            i++; continue;
+        }
+        
+        const ulMatch = line.match(/^[-*] (.*)/);
+        if (ulMatch) elements.push(<li key={i} className="ml-6 list-disc text-slate-300"><InlineMarkdown text={ulMatch[1]} /></li>);
+        else if (line.trim() === '') elements.push(<div key={i} className="h-4"></div>);
+        else elements.push(<p key={i} className="text-slate-300 my-2 leading-relaxed"><InlineMarkdown text={line} /></p>);
+        i++;
     }
     return elements;
-  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, onToggleCollapse, isCollapsed, project, viewScope, isArchiveView, hideCompletedTasks]);
+  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, onToggleCollapse, isCollapsed, project, viewScope, isArchiveView, hideCompletedTasks, markdown, projectStartLine, onArchiveTasks, onReorderTask]);
 
   const renderedNodes = useMemo(() => {
-    if (isEditing) return null; // Prevent expensive render when editing
+    if (isEditing) return null;
     return renderPreviewContent(tocHeadings);
   }, [isEditing, renderPreviewContent, tocHeadings]);
   
   if (isEditing) {
     return (
-      <>
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-indigo-500/50">
-          <Toolbar onFormat={handleFormat} onInsert={handleInsertTextAtCursor} users={props.users} />
-          <div className="relative mt-4">
-              <div 
-                  ref={mirrorRef}
-                  className="w-full min-h-[120px] p-4 font-mono text-slate-300 text-sm leading-relaxed invisible absolute top-0 left-0 whitespace-pre-wrap break-words pointer-events-none"
-                  aria-hidden="true"
-              ></div>
-              <textarea
-                ref={textareaRef}
-                value={editedContent}
-                onChange={handleTextareaChange}
-                onKeyDown={handleTextareaKeyDown}
-                className="w-full min-h-[120px] p-4 bg-slate-800 border border-slate-700 rounded-lg resize-none overflow-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono text-slate-300 text-sm leading-relaxed"
-                autoFocus
-              />
-              {mentionQuery !== null && filteredMentionUsers.length > 0 && mentionPosition && (
-                  <MentionAutocomplete 
-                      users={filteredMentionUsers}
-                      position={mentionPosition}
-                      onSelect={handleMentionSelect}
-                      activeIndex={activeMentionIndex}
-                  />
-              )}
-          </div>
-          <div className="flex justify-end items-center mt-4 space-x-3">
-            <button onClick={handleCancel} className="px-4 py-2 rounded-md bg-slate-600 hover:bg-slate-500 font-semibold flex items-center space-x-2">
-              <X className="w-4 h-4" /><span>Cancel</span>
-            </button>
-            <button onClick={handleSave} className="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 font-semibold flex items-center space-x-2">
-              <Save className="w-4 h-4" /><span>Save</span>
-            </button>
-          </div>
+        <>
+        <div className="relative group bg-slate-800/50 rounded-lg p-4 my-4 transition-colors duration-200 border-2 border-indigo-600 shadow-lg">
+             <div className="mb-4">
+                <Toolbar onFormat={handleFormat} onInsert={handleInsertTextAtCursor} users={props.users} />
+            </div>
+            <div className="relative">
+                <div ref={mirrorRef} className="invisible absolute top-0 left-0 p-3 w-full font-mono text-sm leading-relaxed whitespace-pre-wrap break-words"></div>
+                <textarea
+                    ref={textareaRef}
+                    value={editedContent}
+                    onChange={handleTextareaChange}
+                    onKeyDown={handleTextareaKeyDown}
+                    className="w-full p-3 bg-slate-900 border border-slate-700 rounded-md resize-y focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm leading-relaxed"
+                />
+                 {mentionQuery !== null && filteredMentionUsers.length > 0 && mentionPosition && (
+                    <MentionAutocomplete
+                        users={filteredMentionUsers}
+                        position={mentionPosition}
+                        onSelect={handleMentionSelect}
+                        activeIndex={activeMentionIndex}
+                    />
+                )}
+            </div>
+            <div className="flex justify-end items-center mt-4 space-x-3">
+                <button onClick={handleCancel} className="px-4 py-2 rounded-md bg-slate-600 hover:bg-slate-500 font-semibold flex items-center space-x-2"><X className="w-4 h-4"/><span>Cancel</span></button>
+                <button onClick={handleSave} className="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 font-semibold flex items-center space-x-2"><Save className="w-4 h-4"/><span>Save</span></button>
+            </div>
         </div>
         {isInputModalOpen && inputModalConfig && (
             <InputModal
@@ -1046,23 +698,23 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
                 confirmText={inputModalConfig.confirmText}
             />
         )}
-        <DatePickerModal
+         <DatePickerModal
             isOpen={isDatePickerOpen}
             onClose={() => setIsDatePickerOpen(false)}
             onSelectDate={handleDateSelect}
             title="Select Due Date"
             confirmText="Insert Date"
         />
-      </>
+        </>
     );
   }
-  
+
   if (!renderedNodes) {
     return null;
   }
         
-  const headingNode = section.heading ? renderedNodes[0] : null;
-  const contentNodes = section.heading ? renderedNodes.slice(1) : renderedNodes;
+  const headingNode = section.heading ? renderedNodes.find(n => React.isValidElement(n) && typeof n.type === 'string' && n.type.startsWith('h')) : null;
+  const contentNodes = renderedNodes.filter(n => n !== headingNode);
 
   return (
     <>
@@ -1071,12 +723,12 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
         <TableOfContents headings={tocHeadings} />
        )}
        <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
-        {isArchivable && (
+        {!isArchiveView && completedTasksInSection.length > 0 && (
             <button 
-                onClick={() => onArchiveSection(section.startLine, section.endLine, project!.title)}
+                onClick={() => onArchiveTasks(completedTasksInSection)}
                 className="p-2 rounded-full bg-slate-700/50 text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 hover:bg-indigo-600 hover:text-white"
-                aria-label="Archive section"
-                title="Archive section"
+                aria-label="Archive completed tasks in this section"
+                title="Archive completed tasks"
             >
                 <Archive className="w-4 h-4" />
             </button>
@@ -1129,8 +781,8 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
           title="Restore Section"
           confirmText="Yes, Restore"
       >
-          <p>Are you sure you want to restore this section to the project <strong className="text-slate-200">"{project?.title}"</strong>?</p>
-          <p className="text-sm text-slate-400 mt-2">The section will be removed from the archive and become active again.</p>
+          <p>Are you sure you want to restore this section?</p>
+          <p className="text-sm text-slate-400 mt-2">The section will be removed from the archive and merged back into the active project.</p>
       </ConfirmationModal>
     </>
   );

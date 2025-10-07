@@ -1,6 +1,3 @@
-
-
-
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Save, X } from 'lucide-react';
 import type { User } from '../types';
@@ -218,8 +215,8 @@ const FullDocumentEditor: React.FC<FullDocumentEditorProps> = ({ content, onChan
         case 'update': {
             const today = new Date().toISOString().split('T')[0];
             const textBeforeCursor = content.substring(0, selectionStart);
-            const atStartOfLine = selectionStart === 0 || textBeforeCursor.endsWith('\n');
-            insertion = `${atStartOfLine ? '' : '\n'}  - ${today}: `;
+            const needsNewline = selectionStart > 0 && !textBeforeCursor.endsWith('\n');
+            insertion = `${needsNewline ? '\n' : ''}  - ${today}: `;
             newCursorPos = selectionStart + insertion.length;
             break;
         }

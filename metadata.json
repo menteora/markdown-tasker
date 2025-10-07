@@ -1,5 +1,5 @@
 {
-  "name": "Interactive Markdown Tasker",
+  "name": "Markdown Tasker v2",
   "description": "A markdown editor that allows you to create task lists and assign tasks to users directly from the preview. Unlike classic markdown, this tool lets you intercept tasks and assign them to specific people.",
   "requestFramePermissions": []
 }

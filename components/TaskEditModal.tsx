@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, Save } from 'lucide-react';
 import type { User, Task } from '../types';
@@ -245,8 +242,8 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, task }) 
         case 'update': {
             const today = new Date().toISOString().split('T')[0];
             const textBeforeCursor = content.substring(0, selectionStart);
-            const atStartOfLine = selectionStart === 0 || textBeforeCursor.endsWith('\n');
-            insertion = `${atStartOfLine ? '' : '\n'}  - ${today}: `;
+            const needsNewline = selectionStart > 0 && !textBeforeCursor.endsWith('\n');
+            insertion = `${needsNewline ? '\n' : ''}  - ${today}: `;
             newCursorPos = selectionStart + insertion.length;
             break;
         }

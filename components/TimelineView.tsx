@@ -8,6 +8,7 @@ type ViewScope = 'single' | 'all';
 interface TimelineViewProps {
   tasks: Task[];
   viewScope: ViewScope;
+  onNavigate: (projectTitle: string, sectionSlug: string) => void;
 }
 
 const parseInlineMarkdown = (text: string): React.ReactNode[] => {
@@ -23,7 +24,12 @@ const parseInlineMarkdown = (text: string): React.ReactNode[] => {
 };
 const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => <>{parseInlineMarkdown(text)}</>;
 
-const TimelineTaskItem: React.FC<{ task: Task; user: User | null; viewScope: ViewScope }> = ({ task, user, viewScope }) => {
+const TimelineTaskItem: React.FC<{ task: Task; user: User | null; viewScope: ViewScope; onNavigate: (projectTitle: string, sectionSlug: string) => void; }> = ({ task, user, viewScope, onNavigate }) => {
+  const contextPath = [
+    viewScope === 'all' ? task.projectTitle : null,
+    task.sectionTitle
+  ].filter(Boolean).join(' > ');
+  
   return (
     <div className="flex items-start space-x-3 p-3 bg-slate-800/50 rounded-md">
       {task.completed ? (
@@ -42,15 +48,25 @@ const TimelineTaskItem: React.FC<{ task: Task; user: User | null; viewScope: Vie
               <span>{user.name}</span>
             </div>
           )}
-          {viewScope === 'all' && <span className="font-medium text-indigo-400">{task.projectTitle}</span>}
         </div>
+        {contextPath && task.sectionSlug ? (
+          <button 
+            onClick={() => onNavigate(task.projectTitle, task.sectionSlug!)} 
+            className="block text-xs text-indigo-400 font-medium mt-1 hover:underline text-left"
+            title={`Go to section: ${task.sectionTitle}`}
+          >
+            {contextPath}
+          </button>
+        ) : viewScope === 'all' ? (
+          <span className="block text-xs text-slate-500 font-medium mt-1">{task.projectTitle}</span>
+        ) : null}
       </div>
       <span className="text-xs font-mono whitespace-nowrap text-slate-400">{task.dueDate}</span>
     </div>
   );
 };
 
-const TimelineSection: React.FC<{ title: string; icon: React.ReactNode; tasks: Task[]; viewScope: ViewScope; }> = ({ title, icon, tasks, viewScope }) => {
+const TimelineSection: React.FC<{ title: string; icon: React.ReactNode; tasks: Task[]; viewScope: ViewScope; onNavigate: (projectTitle: string, sectionSlug: string) => void; }> = ({ title, icon, tasks, viewScope, onNavigate }) => {
     const { users } = useProject();
     const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
     if (tasks.length === 0) return null;
@@ -68,6 +84,7 @@ const TimelineSection: React.FC<{ title: string; icon: React.ReactNode; tasks: T
                         task={task}
                         user={task.assigneeAlias ? userByAlias.get(task.assigneeAlias) ?? null : null}
                         viewScope={viewScope}
+                        onNavigate={onNavigate}
                     />
                 ))}
             </div>
@@ -75,7 +92,7 @@ const TimelineSection: React.FC<{ title: string; icon: React.ReactNode; tasks: T
     );
 };
 
-const TimelineView: React.FC<TimelineViewProps> = ({ tasks, viewScope }) => {
+const TimelineView: React.FC<TimelineViewProps> = ({ tasks, viewScope, onNavigate }) => {
   const groupedTasks = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -132,30 +149,35 @@ const TimelineView: React.FC<TimelineViewProps> = ({ tasks, viewScope }) => {
               icon={<AlertTriangle className="w-5 h-5 text-red-400" />}
               tasks={groupedTasks.overdue}
               viewScope={viewScope}
+              onNavigate={onNavigate}
           />
            <TimelineSection
               title="Due Today"
               icon={<Calendar className="w-5 h-5 text-yellow-400" />}
               tasks={groupedTasks.dueToday}
               viewScope={viewScope}
+              onNavigate={onNavigate}
           />
            <TimelineSection
               title="This Week"
               icon={<ArrowRight className="w-5 h-5 text-blue-400" />}
               tasks={groupedTasks.thisWeek}
               viewScope={viewScope}
+              onNavigate={onNavigate}
           />
           <TimelineSection
               title="This Month"
               icon={<Clock className="w-5 h-5 text-indigo-400" />}
               tasks={groupedTasks.thisMonth}
               viewScope={viewScope}
+              onNavigate={onNavigate}
           />
           <TimelineSection
               title="Later"
               icon={<Inbox className="w-5 h-5 text-slate-400" />}
               tasks={groupedTasks.later}
               viewScope={viewScope}
+              onNavigate={onNavigate}
           />
       </div>
     </div>

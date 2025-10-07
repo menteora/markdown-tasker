@@ -1,8 +1,15 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
-import type { User, Project, Settings, FullProjectState } from '../types';
+import type { User, Project, Settings, FullProjectState, Task } from '../types';
 import { useMarkdownParser } from '../hooks/useMarkdownParser';
 import { useSettings as useSettingsHook } from '../hooks/useSettings';
 import { INITIAL_USERS } from '../constants';
+import { remark } from 'remark';
+import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
+import remarkStringify from 'remark-stringify';
+import { visit, EXIT } from 'unist-util-visit';
+import { toString } from 'mdast-util-to-string';
+import type { Root, Content, Heading, List, ListItem, Paragraph, Text, PhrasingContent } from 'mdast';
 
 const initialMarkdown = `# Project Titan Launch 🚀
 
@@ -38,11 +45,18 @@ This is a second project within the same file. You can switch between projects u
 - [ ] Migrate database to new server !2024-11-01 (@bob) ($3000)
 - [ ] Update server dependencies ($400)`;
 
-const initialArchiveMarkdown = `# Archived Sections
-
-This is where your archived sections will be stored, organized by their original project.`;
+const initialArchiveMarkdown = ``;
 
 const PROJECT_STORAGE_KEY = 'md-tasker-project-state-v2';
+
+const processor = remark()
+    .use(remarkGfm)
+    .use(remarkStringify, {
+        bullet: '-',
+        listItemIndent: 'one',
+        rule: '-',
+        tightDefinitions: true,
+    });
 
 const loadProjectFromStorage = () => {
     try {
@@ -50,8 +64,8 @@ const loadProjectFromStorage = () => {
         if (storedState) {
             const data = JSON.parse(storedState);
             if (data && typeof data.markdown === 'string' && Array.isArray(data.users)) {
-                return { 
-                    markdown: data.markdown, 
+                return {
+                    markdown: data.markdown,
                     users: data.users,
                     archiveMarkdown: data.archiveMarkdown || initialArchiveMarkdown
                 };
@@ -76,8 +90,8 @@ interface ProjectContextType {
     updateSection: (startLine: number, endLine: number, newContent: string, isArchive: boolean) => void;
     toggleTask: (absoluteLineIndex: number, isCompleted: boolean) => void;
     updateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string, isArchive: boolean) => void;
-    moveSection: (sectionToMove: {startLine: number, endLine: number}, destinationLine: number) => void;
-    duplicateSection: (sectionToDuplicate: {startLine: number, endLine: number}, destinationLine: number) => void;
+    moveSection: (sectionToMove: { startLine: number, endLine: number }, destinationLine: number) => void;
+    duplicateSection: (sectionToDuplicate: { startLine: number, endLine: number }, destinationLine: number) => void;
     addBulkTaskUpdates: (taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => void;
     addUser: (newUser: Omit<User, 'avatarUrl'>) => void;
     updateUser: (oldAlias: string, updatedUser: User) => void;
@@ -85,7 +99,9 @@ interface ProjectContextType {
     importProject: (file: File) => void;
     handleRequestLocalRestore: (data: FullProjectState) => void;
     archiveSection: (section: { startLine: number, endLine: number }, projectTitle: string) => void;
-    restoreSection: (section: { startLine: number, endLine: number }, projectTitle: string) => void;
+    restoreSection: (section: { startLine: number, endLine: number }) => void;
+    archiveTasks: (tasksToArchive: Task[]) => void;
+    reorderTask: (taskToMove: Task, direction: 'up' | 'down' | 'top' | 'bottom') => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -109,207 +125,429 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }, [markdown, archiveMarkdown, users]);
     
-    const updateSection = useCallback((startLine: number, endLine: number, newContent: string, isArchive: boolean) => {
+    const performAstUpdate = useCallback((
+        updater: (tree: Root) => Root | void,
+        isArchive = false
+    ) => {
+        const sourceMd = isArchive ? archiveMarkdown : markdown;
         const setter = isArchive ? setArchiveMarkdown : setMarkdown;
-        setter(prev => {
-            const lines = prev.split('\n');
-            const before = lines.slice(0, startLine);
-            const after = lines.slice(endLine + 1);
-            const newLines = newContent.split('\n');
-            return [...before, ...newLines, ...after].join('\n');
-        });
-    }, []);
+
+        try {
+            const tree = processor.parse(sourceMd);
+            const result = updater(tree);
+            const newMd = processor.stringify(result || tree);
+            setter(newMd);
+        } catch (error) {
+            console.error("Failed to perform AST update:", error);
+        }
+    }, [markdown, archiveMarkdown]);
+
+    const updateSection = useCallback((startLine: number, endLine: number, newContent: string, isArchive: boolean) => {
+        performAstUpdate(tree => {
+            const newSectionTree = processor.parse(newContent);
+    
+            const startNodeIndex = tree.children.findIndex(node => node.position && node.position.start.line - 1 >= startLine);
+    
+            if (startNodeIndex === -1) {
+                if (startLine === 0) {
+                    tree.children.unshift(...newSectionTree.children);
+                }
+                return;
+            }
+    
+            let endNodeIndex = -1;
+            for (let i = tree.children.length - 1; i >= startNodeIndex; i--) {
+                const node = tree.children[i];
+                if (node.position && node.position.start.line - 1 <= endLine) {
+                    endNodeIndex = i;
+                    break;
+                }
+            }
+    
+            if (endNodeIndex === -1) {
+                 endNodeIndex = startNodeIndex;
+            }
+    
+            const nodesToRemove = endNodeIndex - startNodeIndex + 1;
+            tree.children.splice(startNodeIndex, nodesToRemove, ...newSectionTree.children);
+        }, isArchive);
+    }, [performAstUpdate]);
 
     const updateTaskBlock = useCallback((absoluteStartLine: number, originalLineCount: number, newContent: string, isArchive: boolean) => {
-        const setter = isArchive ? setArchiveMarkdown : setMarkdown;
-        setter(prev => {
-            const lines = prev.split('\n');
-            const before = lines.slice(0, absoluteStartLine);
-            const after = lines.slice(absoluteStartLine + originalLineCount);
-            const newLines = newContent.split('\n');
-            return [...before, ...newLines, ...after].join('\n');
-        });
-    }, []);
+        performAstUpdate(tree => {
+            let taskNode: ListItem | null = null;
+            let taskNodeIndex: number | null = null;
+            let parentList: List | null = null;
+    
+            visit(tree, 'listItem', (node: ListItem, index, parent) => {
+                if (node.position?.start.line - 1 === absoluteStartLine) {
+                    taskNode = node;
+                    taskNodeIndex = index;
+                    parentList = parent as List;
+                    return EXIT;
+                }
+            });
+    
+            if (taskNode === null || taskNodeIndex === null || !parentList) {
+                console.error("Could not find the task to update in the AST at line:", absoluteStartLine);
+                return;
+            }
+    
+            const newAst = processor.parse(newContent);
+            const newList = newAst.children.find(child => child.type === 'list') as List;
+    
+            if (!newList || !newList.children || newList.children.length === 0) {
+                console.error("Could not parse new task content into a valid list item.");
+                if (newAst.children[0]?.type === 'paragraph' && taskNode.children.some(c => c.type === 'paragraph')) {
+                    const listItemParagraph = taskNode.children.find(c => c.type === 'paragraph') as Paragraph;
+                    listItemParagraph.children = (newAst.children[0] as Paragraph).children;
+                }
+                return;
+            }
+    
+            const newItems = newList.children as ListItem[];
+            parentList.children.splice(taskNodeIndex, 1, ...newItems);
+    
+        }, isArchive);
+    }, [performAstUpdate]);
 
     const toggleTask = useCallback((absoluteLineIndex: number, isCompleted: boolean) => {
-        setMarkdown(prevMarkdown => {
-            const lines = prevMarkdown.split('\n');
-            if (absoluteLineIndex >= lines.length) return prevMarkdown;
-            const line = lines[absoluteLineIndex];
+        performAstUpdate(tree => {
+            visit(tree, 'listItem', (node: ListItem) => {
+                if (node.position?.start.line - 1 === absoluteLineIndex && typeof node.checked === 'boolean') {
+                    node.checked = isCompleted;
 
-            const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})/;
-            let newLine = line.replace(dateRegex, '');
+                    const paragraph = node.children.find(child => child.type === 'paragraph') as Paragraph | undefined;
 
-            if (isCompleted) {
-                const today = new Date().toISOString().split('T')[0];
-                newLine = `${newLine.trim()} ~${today}`;
+                    if (!paragraph) return EXIT;
+                    
+                    paragraph.children.forEach(child => {
+                        if (child.type === 'text') {
+                            child.value = child.value.replace(/\s*~[0-9]{4}-[0-9]{2}-[0-9]{2}/g, '');
+                        }
+                    });
+
+                    paragraph.children = paragraph.children.filter(child => !(child.type === 'text' && child.value.trim() === ''));
+
+                    if (isCompleted) {
+                        const today = new Date().toISOString().split('T')[0];
+                        let lastChild = paragraph.children[paragraph.children.length - 1];
+
+                        if (lastChild && lastChild.type === 'text') {
+                            lastChild.value = `${lastChild.value.trimEnd()} ~${today}`;
+                        } else {
+                            paragraph.children.push({ type: 'text', value: ` ~${today}` });
+                        }
+                    }
+
+                    return EXIT;
+                }
+            });
+        });
+    }, [performAstUpdate]);
+
+    const moveOrDuplicateSection = useCallback((
+        sectionLines: { startLine: number; endLine: number },
+        destinationLine: number,
+        isDuplicate: boolean
+    ) => {
+        performAstUpdate(tree => {
+            const { startLine, endLine } = sectionLines;
+            let startIndex = -1, endIndex = -1;
+
+            tree.children.forEach((node, index) => {
+                if (node.position) {
+                    if (node.position.start.line - 1 >= startLine && startIndex === -1) startIndex = index;
+                    if (node.position.end.line - 1 <= endLine) endIndex = index;
+                }
+            });
+
+            if (startIndex === -1 || endIndex === -1) return;
+
+            const sectionNodes = tree.children.slice(startIndex, endIndex + 1);
+            if (!isDuplicate) {
+                tree.children.splice(startIndex, sectionNodes.length);
             }
+
+            let destinationIndex = tree.children.findIndex(node => node.position && node.position.start.line - 1 >= destinationLine);
+            if (destinationIndex === -1) destinationIndex = tree.children.length;
             
-            const taskRegex = /^- \[( |x)\]/;
-            newLine = newLine.replace(taskRegex, `- [${isCompleted ? 'x' : ' '}]`);
-            
-            lines[absoluteLineIndex] = newLine;
-            return lines.join('\n');
+            const nodesToInsert = isDuplicate ? JSON.parse(JSON.stringify(sectionNodes)) : sectionNodes;
+            tree.children.splice(destinationIndex, 0, ...nodesToInsert);
         });
-    }, []);
-
-    const moveSection = useCallback((sectionToMove: {startLine: number, endLine: number}, destinationLine: number) => {
-        setMarkdown(prev => {
-            const lines = prev.split('\n');
-            const sectionContent = lines.slice(sectionToMove.startLine, sectionToMove.endLine + 1);
-            const linesWithoutSection = [
-                ...lines.slice(0, sectionToMove.startLine),
-                ...lines.slice(sectionToMove.endLine + 1)
-            ];
-            const adjustedDestinationLine = destinationLine > sectionToMove.startLine 
-                ? destinationLine - sectionContent.length 
-                : destinationLine;
-            const contentToInsert = [...sectionContent];
-            if (adjustedDestinationLine > 0 && linesWithoutSection[adjustedDestinationLine - 1]?.trim() !== '') {
-                contentToInsert.unshift('');
-            }
-            if (adjustedDestinationLine < linesWithoutSection.length && linesWithoutSection[adjustedDestinationLine]?.trim() !== '') {
-                contentToInsert.push('');
-            }
-            const newLines = [
-                ...linesWithoutSection.slice(0, adjustedDestinationLine),
-                ...contentToInsert,
-                ...linesWithoutSection.slice(adjustedDestinationLine)
-            ];
-            return newLines.join('\n');
-        });
-    }, []);
-
-    const duplicateSection = useCallback((sectionToDuplicate: {startLine: number, endLine: number}, destinationLine: number) => {
-        setMarkdown(prev => {
-            const lines = prev.split('\n');
-            const sectionContent = lines.slice(sectionToDuplicate.startLine, sectionToDuplicate.endLine + 1);
-            const newLines = [
-                ...lines.slice(0, destinationLine),
-                ...sectionContent,
-                ...lines.slice(destinationLine)
-            ];
-            return newLines.join('\n');
-        });
-    }, []);
+    }, [performAstUpdate]);
     
-    const archiveSection = useCallback(({ startLine, endLine }: { startLine: number, endLine: number }, projectTitle: string) => {
-        const today = new Date().toISOString().split('T')[0];
-        let sectionContent: string[] = [];
+    const moveSection = useCallback((sectionToMove, destinationLine) => {
+        moveOrDuplicateSection(sectionToMove, destinationLine, false);
+    }, [moveOrDuplicateSection]);
 
-        setMarkdown(prev => {
-            const lines = prev.split('\n');
-            sectionContent = lines.slice(startLine, endLine + 1);
-            const linesWithoutSection = [
-                ...lines.slice(0, startLine),
-                ...lines.slice(endLine + 1)
-            ];
-            return linesWithoutSection.join('\n').replace(/\n\n\n/g, '\n\n').trim();
-        });
+    const duplicateSection = useCallback((sectionToDuplicate, destinationLine) => {
+        moveOrDuplicateSection(sectionToDuplicate, destinationLine, true);
+    }, [moveOrDuplicateSection]);
+    
+    const findOrCreateHierarchicalInsertionIndex = (root: Root, hierarchy: { text: string; level: number }[]): number => {
+        let parentHeadingIndex = -1;
+        let parentHeadingLevel = 0;
+        let insertionPoint = 0;
 
-        setArchiveMarkdown(prev => {
-            const lines = prev.split('\n');
-            const archiveProjectHeading = `# ${projectTitle}`;
-            let projectIndex = lines.findIndex(line => line.trim() === archiveProjectHeading);
+        for (const currentHeading of hierarchy) {
+            const searchRangeStart = parentHeadingIndex + 1;
+            
+            const nextHigherOrEqualHeadingIndex = root.children.findIndex(
+                (node, idx) => idx >= searchRangeStart && node.type === 'heading' && node.depth <= parentHeadingLevel
+            );
+            const searchRangeEnd = nextHigherOrEqualHeadingIndex === -1 ? root.children.length : nextHigherOrEqualHeadingIndex;
 
-            const contentToInsert = [...sectionContent, `_Archived on: ${today}_`];
+            const foundHeadingIndexInSlice = root.children.slice(searchRangeStart, searchRangeEnd).findIndex(
+                node => node.type === 'heading' && node.depth === currentHeading.level && toString(node).trim() === currentHeading.text
+            );
 
-            if (projectIndex === -1) {
-                return [...lines, '', archiveProjectHeading, ...contentToInsert].join('\n');
+            let foundHeadingIndex = foundHeadingIndexInSlice !== -1 ? foundHeadingIndexInSlice + searchRangeStart : -1;
+
+            if (foundHeadingIndex === -1) {
+                const newHeadingNode: Heading = {
+                    type: 'heading',
+                    depth: currentHeading.level,
+                    children: [{ type: 'text', value: currentHeading.text }]
+                };
+                
+                insertionPoint = searchRangeEnd;
+                root.children.splice(insertionPoint, 0, newHeadingNode);
+                foundHeadingIndex = insertionPoint;
             }
 
-            let nextProjectIndex = lines.findIndex((line, i) => i > projectIndex && line.startsWith('# '));
-            if (nextProjectIndex === -1) nextProjectIndex = lines.length;
-            
-            const before = lines.slice(0, nextProjectIndex);
-            const after = lines.slice(nextProjectIndex);
-            return [...before, '', ...contentToInsert, ...after].join('\n');
-        });
-    }, []);
+            parentHeadingIndex = foundHeadingIndex;
+            parentHeadingLevel = currentHeading.level;
+            insertionPoint = parentHeadingIndex + 1;
+        }
 
-    const restoreSection = useCallback(({ startLine, endLine }: { startLine: number, endLine: number }, projectTitle: string) => {
-        let sectionContent: string[] = [];
+        return insertionPoint;
+    };
 
-        setArchiveMarkdown(prev => {
-            const lines = prev.split('\n');
-            const rawSection = lines.slice(startLine, endLine + 1);
-            // Remove the archive date line
-            sectionContent = rawSection.filter(line => !line.startsWith('_Archived on:'));
+    const findOrCreateHierarchicalList = (root: Root, hierarchy: { text: string; level: number }[]): List => {
+        const insertionIndex = findOrCreateHierarchicalInsertionIndex(root, hierarchy);
+        const nodeAfter = root.children[insertionIndex];
+        
+        if (nodeAfter && nodeAfter.type === 'list') {
+            return nodeAfter;
+        }
+
+        const newList: List = { type: 'list', ordered: false, children: [] };
+        root.children.splice(insertionIndex, 0, newList);
+        return newList;
+    };
+
+    const archiveSection = useCallback((section: { startLine: number, endLine: number }, projectTitle: string) => {
+        let sectionNodes: Content[] = [];
+        let hierarchy: Task['headingHierarchy'] = [{ text: projectTitle, level: 1 }];
+
+        performAstUpdate(tree => {
+            let startIndex = -1, endIndex = -1;
+            tree.children.forEach((node, i) => {
+                if (node.position) {
+                    if (node.position.start.line - 1 >= section.startLine && startIndex === -1) startIndex = i;
+                    if (node.position.end.line - 1 <= section.endLine) endIndex = i;
+                }
+            });
             
-            let linesWithoutSection = [
-                ...lines.slice(0, startLine),
-                ...lines.slice(endLine + 1)
-            ];
-            
-            // Clean up empty project if this was the last section
-            const projectInArchive = archiveProjects.find(p => p.title === projectTitle);
-            if (projectInArchive && projectInArchive.headings.length === 1 && projectInArchive.headings[0].line >= startLine && projectInArchive.headings[0].line <= endLine) {
-                 const projectLines = lines.slice(projectInArchive.startLine, projectInArchive.endLine + 1);
-                 const hasOtherContent = projectLines.some(line => line.trim() !== '' && !rawSection.includes(line));
-                 if (!hasOtherContent) {
-                    linesWithoutSection = [
-                        ...lines.slice(0, projectInArchive.startLine),
-                        ...lines.slice(projectInArchive.endLine + 1)
-                    ];
-                 }
+            if (startIndex === -1) return;
+
+            const currentProject = projects.find(p => p.title === projectTitle);
+            const sectionHeadingNode = tree.children[startIndex];
+            if (currentProject && sectionHeadingNode.type === 'heading') {
+                const sectionHeadingText = toString(sectionHeadingNode).trim();
+                const taskWithHierarchy = [...currentProject.unassignedTasks, ...Object.values(currentProject.groupedTasks).flatMap(g=>g.tasks)]
+                    .find(t => t.sectionTitle === sectionHeadingText);
+                if (taskWithHierarchy && taskWithHierarchy.headingHierarchy.length > 1) {
+                     hierarchy = taskWithHierarchy.headingHierarchy;
+                } else {
+                    hierarchy = [{ text: projectTitle, level: 1 }, {text: sectionHeadingText, level: sectionHeadingNode.depth}]
+                }
             }
-
-            return linesWithoutSection.join('\n').replace(/\n\n\n/g, '\n\n').trim();
+            sectionNodes = tree.children.splice(startIndex, endIndex - startIndex + 1);
         });
 
-        setMarkdown(prev => {
-            const lines = prev.split('\n');
-            const destProject = projects.find(p => p.title === projectTitle);
-            if (!destProject) { 
-                // Should not happen if project exists, but as a fallback, append to end.
-                return [...lines, '', ...sectionContent].join('\n');
-            }
+        performAstUpdate(tree => {
+            if (sectionNodes.length === 0) return;
+            const insertionIndex = findOrCreateHierarchicalInsertionIndex(tree, hierarchy);
+            const nodesToInsert = [...sectionNodes, { type: 'paragraph', children: [{ type: 'text', value: `_Archived on: ${new Date().toISOString().split('T')[0]}_` }] }];
+            tree.children.splice(insertionIndex, 0, ...nodesToInsert);
+        }, true);
+    }, [performAstUpdate, projects]);
 
-            const before = lines.slice(0, destProject.endLine + 1);
-            const after = lines.slice(destProject.endLine + 1);
-            return [...before, '', ...sectionContent, ...after].join('\n');
-        });
-    }, [projects, archiveProjects]);
+    const restoreSection = useCallback((section: { startLine: number, endLine: number }) => {
+        let sectionNodes: Content[] = [];
+        let hierarchy: Task['headingHierarchy'] = [];
 
-    const addBulkTaskUpdates = useCallback((taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => {
-        setMarkdown(prevMarkdown => {
-            const lines = prevMarkdown.split('\n');
-            const today = new Date().toISOString().split('T')[0];
-            const assigneeString = assigneeAlias ? ` (@${assigneeAlias})` : '';
-            const newUpdateLine = `  - ${today}: ${updateText}${assigneeString}`;
-            const updateRegex = /^  - \d{4}-\d{2}-\d{2}: .*/;
-            const sortedIndexes = [...taskLineIndexes].sort((a, b) => b - a);
-            for (const taskLineIndex of sortedIndexes) {
-                let insertAt = taskLineIndex + 1;
-                while (insertAt < lines.length && (updateRegex.test(lines[insertAt]) || lines[insertAt].trim() === '')) {
-                    if (updateRegex.test(lines[insertAt])) {
-                        insertAt++;
-                    } else {
-                        break;
+        performAstUpdate(tree => {
+            let startIndex = -1, endIndex = -1;
+            tree.children.forEach((node, i) => {
+                if (node.position) {
+                    if (node.position.start.line - 1 >= section.startLine && startIndex === -1) startIndex = i;
+                    if (node.position.end.line - 1 <= section.endLine) endIndex = i;
+                }
+            });
+
+            if (startIndex === -1) return;
+
+            const sectionHeadingNode = tree.children[startIndex];
+            if (sectionHeadingNode.type === 'heading') {
+                let currentLevel = sectionHeadingNode.depth;
+                const path: Task['headingHierarchy'] = [{ text: toString(sectionHeadingNode).trim(), level: currentLevel }];
+                
+                for (let i = startIndex - 1; i >= 0; i--) {
+                    const node = tree.children[i];
+                    if (node.type === 'heading' && node.depth < currentLevel) {
+                        path.unshift({ text: toString(node).trim(), level: node.depth });
+                        currentLevel = node.depth;
                     }
                 }
-                lines.splice(insertAt, 0, newUpdateLine);
+                hierarchy = path;
             }
-            return lines.join('\n');
-        });
-    }, []);
+            
+            sectionNodes = tree.children.splice(startIndex, endIndex - startIndex + 1);
+        }, true);
+        
+        performAstUpdate(tree => {
+            if (sectionNodes.length === 0 || hierarchy.length === 0) return;
 
+            const insertionIndex = findOrCreateHierarchicalInsertionIndex(tree, hierarchy);
+            const nodeAtInsertionPoint = tree.children[insertionIndex];
+            
+            const contentNodesToRestore = sectionNodes
+                .filter(node => node.type !== 'heading' && !(node.type === 'paragraph' && toString(node).startsWith('_Archived on:')))
+                .flatMap(node => (node.type === 'list' ? (node as List).children : [node]));
+                
+            if (nodeAtInsertionPoint && nodeAtInsertionPoint.type === 'list') {
+                nodeAtInsertionPoint.children.push(...contentNodesToRestore.filter(c => c.type === 'listItem') as ListItem[]);
+            } else {
+                const listItems = contentNodesToRestore.filter(c => c.type === 'listItem') as ListItem[];
+                if (listItems.length > 0) {
+                    const newList: List = { type: 'list', ordered: false, children: listItems };
+                    tree.children.splice(insertionIndex, 0, newList);
+                }
+                 const nonListItems = contentNodesToRestore.filter(c => c.type !== 'listItem');
+                 if (nonListItems.length > 0) {
+                    tree.children.splice(insertionIndex, 0, ...nonListItems);
+                }
+            }
+        });
+    }, [performAstUpdate]);
+
+    const archiveTasks = useCallback((tasksToArchive: Task[]) => {
+        const lineIndicesToRemove = new Set(tasksToArchive.flatMap(t => Array.from({ length: t.blockEndLine - t.lineIndex + 1 }, (_, i) => t.lineIndex + i)));
+        
+        let extractedTaskNodesByHierarchy: Map<string, ListItem[]> = new Map();
+
+        performAstUpdate(tree => {
+            const parentsToClean = new Set<List>();
+            visit(tree, 'listItem', (node: ListItem, index, parent: List) => {
+                if (node.position && lineIndicesToRemove.has(node.position.start.line - 1)) {
+                    const task = tasksToArchive.find(t => t.lineIndex === node.position!.start.line - 1);
+                    if (task && parent && parent.type === 'list') {
+                        const key = JSON.stringify(task.headingHierarchy);
+                        if (!extractedTaskNodesByHierarchy.has(key)) extractedTaskNodesByHierarchy.set(key, []);
+                        extractedTaskNodesByHierarchy.get(key)!.push(JSON.parse(JSON.stringify(node)));
+
+                        parent.children.splice(index, 1);
+                        parentsToClean.add(parent);
+                        return [visit.SKIP, index];
+                    }
+                }
+            });
+            visit(tree, 'list', (node: List, index, parent) => {
+                if (parentsToClean.has(node) && node.children.length === 0 && parent && Array.isArray((parent as any).children)) {
+                     (parent as any).children.splice(index, 1);
+                     return [visit.SKIP, index];
+                }
+            });
+        });
+
+        performAstUpdate(tree => {
+             for(const [key, taskNodes] of extractedTaskNodesByHierarchy.entries()) {
+                const hierarchy = JSON.parse(key);
+                const targetList = findOrCreateHierarchicalList(tree, hierarchy);
+                targetList.children.push(...taskNodes);
+             }
+        }, true);
+
+    }, [performAstUpdate]);
+
+    const reorderTask = useCallback((taskToMove: Task, direction: 'up' | 'down' | 'top' | 'bottom') => {
+        performAstUpdate(tree => {
+            let listNode: List | null = null;
+            let currentItem: ListItem | null = null;
+            let currentIndex = -1;
+
+            visit(tree, 'listItem', (node: ListItem, index, parent: List) => {
+                if (node.position?.start.line - 1 === taskToMove.lineIndex) {
+                    listNode = parent;
+                    currentItem = node;
+                    currentIndex = index;
+                    return EXIT;
+                }
+            });
+
+            if (!listNode || !currentItem || currentIndex === -1) return;
+
+            const siblings = listNode.children;
+            let targetIndex: number;
+
+            if (direction === 'top') targetIndex = 0;
+            else if (direction === 'bottom') targetIndex = siblings.length - 1;
+            else if (direction === 'up') targetIndex = currentIndex - 1;
+            else targetIndex = currentIndex + 1;
+
+            if (targetIndex < 0 || targetIndex >= siblings.length) return;
+
+            siblings.splice(currentIndex, 1);
+            siblings.splice(targetIndex, 0, currentItem);
+        });
+    }, [performAstUpdate]);
+    
+    const addBulkTaskUpdates = useCallback((taskLineIndexes: number[], updateText: string, assigneeAlias: string | null) => {
+        performAstUpdate(tree => {
+            const today = new Date().toISOString().split('T')[0];
+            const assigneeString = assigneeAlias ? ` (@${assigneeAlias})` : '';
+            const updateContent: PhrasingContent[] = [{ type: 'text', value: `${today}: ${updateText}${assigneeString}` }];
+            const newUpdateItem: ListItem = { type: 'listItem', checked: null, children: [{ type: 'paragraph', children: updateContent }] };
+
+            visit(tree, 'listItem', (node: ListItem) => {
+                if (node.position && taskLineIndexes.includes(node.position.start.line - 1)) {
+                    let subList = node.children.find(child => child.type === 'list') as List;
+                    if (!subList) {
+                        subList = { type: 'list', ordered: false, children: [] };
+                        node.children.push(subList);
+                    }
+                    subList.children.push(JSON.parse(JSON.stringify(newUpdateItem)));
+                }
+            });
+        });
+    }, [performAstUpdate]);
+    
     const updateUser = useCallback((oldAlias: string, updatedUser: User) => {
         setUsers(prevUsers => prevUsers.map(u => u.alias === oldAlias ? updatedUser : u));
         if (oldAlias !== updatedUser.alias) {
-            const searchRegex = new RegExp(`\\(@${oldAlias}\\)`, 'g');
-            const replacement = `(@${updatedUser.alias})`;
-            setMarkdown(prev => prev.replace(searchRegex, replacement));
-            setArchiveMarkdown(prev => prev.replace(searchRegex, replacement));
+            const updater = (tree: Root) => {
+                visit(tree, 'text', (node: Text) => {
+                    node.value = node.value.replace(new RegExp(`\\(@${oldAlias}\\)`, 'g'), `(@${updatedUser.alias})`);
+                });
+            };
+            performAstUpdate(updater, false);
+            performAstUpdate(updater, true);
         }
-    }, []);
+    }, [performAstUpdate]);
 
     const deleteUser = useCallback((userAlias: string) => {
         setUsers(prevUsers => prevUsers.filter(u => u.alias !== userAlias));
-        const unassignRegex = new RegExp(`\\s\\(@${userAlias}\\)`, 'g');
-        setMarkdown(prev => prev.replace(unassignRegex, ''));
-        setArchiveMarkdown(prev => prev.replace(unassignRegex, ''));
-    }, []);
+        const updater = (tree: Root) => {
+            visit(tree, 'text', (node: Text) => {
+                node.value = node.value.replace(new RegExp(`\\s\\(@${userAlias}\\)`, 'g'), '');
+            });
+        };
+        performAstUpdate(updater, false);
+        performAstUpdate(updater, true);
+    }, [performAstUpdate]);
 
     const addUser = useCallback((newUser: Omit<User, 'avatarUrl'>) => {
         if (users.some(u => u.alias === newUser.alias)) {
@@ -330,56 +568,29 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     setUsers(data.users);
                     setMarkdown(data.markdown);
                     setArchiveMarkdown(data.archiveMarkdown || initialArchiveMarkdown);
-                    if (data.settings) {
-                        saveSettings(data.settings as Settings);
-                    }
+                    if (data.settings) saveSettings(data.settings as Settings);
                     alert('Project imported successfully!');
                 } else {
                     alert('Invalid project file format.');
                 }
             } catch (error) {
-                console.error("Failed to parse project file", error);
                 alert('Failed to read or parse the project file.');
             }
         };
         reader.readAsText(file);
     }, [saveSettings]);
 
-    const handleRequestLocalRestore = useCallback((data: FullProjectState) => {
-        // This function will be handled by App.tsx to show a modal
-        // But the core logic could live here if we introduce a modal context
-    }, []);
+    const handleRequestLocalRestore = useCallback(() => {}, []);
 
     const value: ProjectContextType = {
-        markdown,
-        setMarkdown,
-        archiveMarkdown,
-        users,
-        setUsers,
-        settings,
-        saveSettings,
-        projects,
-        archiveProjects,
-        updateSection,
-        toggleTask,
-        updateTaskBlock,
-        moveSection,
-        duplicateSection,
-        addBulkTaskUpdates,
-        addUser,
-        updateUser,
-        deleteUser,
-        importProject,
-        handleRequestLocalRestore,
-        archiveSection,
-        restoreSection,
+        markdown, setMarkdown, archiveMarkdown, users, setUsers, settings, saveSettings,
+        projects, archiveProjects, updateSection, toggleTask, updateTaskBlock, moveSection,
+        duplicateSection, addBulkTaskUpdates, addUser, updateUser, deleteUser,
+        importProject, handleRequestLocalRestore, archiveSection, restoreSection,
+        archiveTasks, reorderTask
     };
 
-    return (
-        <ProjectContext.Provider value={value}>
-            {children}
-        </ProjectContext.Provider>
-    );
+    return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;
 };
 
 export const useProject = (): ProjectContextType => {

@@ -1,14 +1,12 @@
 
+
 import { useMemo } from 'react';
 import type { Heading } from '../types';
-
-// Simple slugify, doesn't need to be collision-proof for this use case.
-const slugify = (text: string): string => {
-  return text.toLowerCase().trim()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/[\s_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-};
+import { remark } from 'remark';
+import remarkParse from 'remark-parse';
+import { visit } from 'unist-util-visit';
+import { toString } from 'mdast-util-to-string';
+import type { Root, Heading as MdastHeading } from 'mdast';
 
 export interface Section {
   startLine: number;
@@ -17,20 +15,30 @@ export interface Section {
   heading: Heading | null;
 }
 
+const simpleSlugify = (text: string): string => {
+  return text.toLowerCase().trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+};
+
 export const useSectionParser = (markdown: string): Section[] => {
   return useMemo(() => {
     const lines = markdown.split('\n');
     const sections: Section[] = [];
     if (lines.length === 0 && markdown === '') return [];
 
+    const processor = remark().use(remarkParse);
+    const tree = processor.parse(markdown) as Root;
+
     const headingIndices: { line: number; level: number; text: string }[] = [];
-    lines.forEach((line, index) => {
-      const hMatch = line.match(/^(#{1,3}) (.*)/);
-      if (hMatch) {
+    visit(tree, 'heading', (node: MdastHeading) => {
+      // Only consider H1, H2, H3 as section dividers
+      if (node.depth <= 3 && node.position) {
         headingIndices.push({
-          line: index,
-          level: hMatch[1].length,
-          text: hMatch[2].trim(),
+          line: node.position.start.line - 1,
+          level: node.depth,
+          text: toString(node).trim(),
         });
       }
     });
@@ -63,7 +71,7 @@ export const useSectionParser = (markdown: string): Section[] => {
         content: lines.slice(startLine, endLine + 1).join('\n'),
         heading: {
           text: h.text,
-          slug: slugify(h.text), // Slug doesn't need to be unique here
+          slug: simpleSlugify(h.text), // Slug doesn't need to be unique here
           level: h.level,
           line: h.line,
         },

@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { BookUp, Upload, Download, FileText, CalendarDays } from 'lucide-react';
 import * as docx from 'docx';
@@ -145,7 +147,6 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ viewScope, currentProje
         projectsToExport.forEach((project, index) => {
             const allTasksInProject = [
                 ...project.unassignedTasks,
-                // FIX: Add explicit type to lambda parameter to fix 'tasks' property does not exist on type 'unknown' error.
                 ...Object.values(project.groupedTasks).flatMap((g: { user: User; tasks: Task[] }) => g.tasks)
             ];
 
@@ -326,7 +327,6 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ viewScope, currentProje
         if (viewScope === 'all') {
             projects.forEach(project => {
                 taskSummaryChildren.push(new docx.Paragraph({ text: project.title, heading: docx.HeadingLevel.HEADING_2, spacing: { before: 400, after: 200 } }));
-                // FIX: Add explicit type to lambda parameter to fix 'tasks' property does not exist on type 'unknown' error.
                 const assignedUsersWithTasks = Object.values(project.groupedTasks).filter((g: { user: User; tasks: Task[] }) => g.tasks.length > 0);
                  assignedUsersWithTasks.forEach(({ user, tasks }) => {
                     taskSummaryChildren.push(new docx.Paragraph({ text: user.name, heading: docx.HeadingLevel.HEADING_3, spacing: { before: 300, after: 150 } }));
@@ -340,7 +340,6 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ viewScope, currentProje
             });
         } else { 
             taskSummaryChildren.push(new docx.Paragraph({ text: currentProject.title, heading: docx.HeadingLevel.HEADING_2, spacing: { before: 400, after: 200 } }));
-            // FIX: Add explicit type to lambda parameter to fix 'tasks' property does not exist on type 'unknown' error.
             const assignedUsersWithTasks = Object.values(currentProject.groupedTasks).filter((g: { user: User; tasks: Task[] }) => g.tasks.length > 0);
             assignedUsersWithTasks.forEach(({ user, tasks }) => {
                 taskSummaryChildren.push(new docx.Paragraph({ text: user.name, heading: docx.HeadingLevel.HEADING_3, spacing: { before: 300, after: 150 } }));
