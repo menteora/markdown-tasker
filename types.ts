@@ -28,6 +28,7 @@ export interface Task {
   blockEndLine: number;
   sectionTitle?: string;
   sectionSlug?: string;
+  headingHierarchy: { text: string; level: number; }[];
 }
 
 export interface GroupedTasks {
