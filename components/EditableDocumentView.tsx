@@ -1,7 +1,7 @@
 
 
-import React, { useMemo, useCallback } from 'react';
-import { useSectionParser } from '../hooks/useSectionParser';
+import React, { useMemo, useCallback, useState } from 'react';
+import { useSectionParser, Section } from '../hooks/useSectionParser';
 import type { User, Project, Heading } from '../types';
 import EditableSection from './EditableSection';
 import { useProject } from '../contexts/ProjectContext';
@@ -19,6 +19,44 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
   const { markdown, projects, viewScope, currentProjectIndex, isArchiveView, hideCompletedTasks } = props;
   const { users, updateSection, moveSection, duplicateSection, toggleTask, updateTaskBlock, archiveSection, restoreSection } = useProject();
   const sections = useSectionParser(markdown);
+  const [collapsedSections, setCollapsedSections] = useState<Set<number>>(new Set());
+
+  const handleToggleCollapse = useCallback((sectionStartLine: number) => {
+    setCollapsedSections(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(sectionStartLine)) {
+            newSet.delete(sectionStartLine);
+        } else {
+            newSet.add(sectionStartLine);
+        }
+        return newSet;
+    });
+  }, []);
+  
+  const processedSections = useMemo(() => {
+    const result: { section: Section, isVisible: boolean }[] = [];
+    let collapsedLevel: number | null = null;
+
+    for (const section of sections) {
+        const sectionLevel = section.heading?.level;
+        let isVisible = true;
+
+        if (collapsedLevel !== null && sectionLevel && sectionLevel > collapsedLevel) {
+            isVisible = false;
+        } else {
+            // We've reached a section at the same level or higher, so stop collapsing
+            collapsedLevel = null;
+        }
+        
+        result.push({ section, isVisible });
+
+        // If the current section is collapsed, mark its level to hide subsequent children
+        if (collapsedSections.has(section.startLine) && sectionLevel) {
+            collapsedLevel = sectionLevel;
+        }
+    }
+    return result;
+  }, [sections, collapsedSections]);
 
   const projectStartLine = useMemo(() => {
     if (viewScope === 'single' && projects[currentProjectIndex] && !isArchiveView) {
@@ -87,7 +125,9 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
                 </div>
             )}
             <div className="space-y-4">
-                {sections.map((section, index) => {
+                {processedSections.map(({ section, isVisible }, index) => {
+                    if (!isVisible) return null;
+                    
                     const projectForSection = projects.find(p => section.startLine >= p.startLine && section.startLine <= p.endLine);
                     const tocHeadings = projectForSection?.headings;
 
@@ -110,6 +150,8 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
                             project={projectForSection}
                             isArchiveView={isArchiveView}
                             hideCompletedTasks={hideCompletedTasks}
+                            isCollapsed={collapsedSections.has(section.startLine)}
+                            onToggleCollapse={() => handleToggleCollapse(section.startLine)}
                         />
                     );
                 })}

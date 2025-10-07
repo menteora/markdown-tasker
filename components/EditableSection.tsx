@@ -489,12 +489,13 @@ interface EditableSectionProps {
   project?: Project;
   isArchiveView?: boolean;
   hideCompletedTasks?: boolean;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
 const EditableSection: React.FC<EditableSectionProps> = (props) => {
-  const { section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, onArchiveSection, onRestoreSection, tocHeadings, viewScope, project, isArchiveView, hideCompletedTasks } = props;
+  const { section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, onArchiveSection, onRestoreSection, tocHeadings, viewScope, project, isArchiveView, hideCompletedTasks, isCollapsed, onToggleCollapse } = props;
   const [isEditing, setIsEditing] = useState(() => !section.content.trim());
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [editedContent, setEditedContent] = useState(section.content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mirrorRef = useRef<HTMLDivElement>(null);
@@ -550,12 +551,6 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
       setFilteredMentionUsers([]);
     }
   }, [mentionQuery]);
-
-  const handleToggleCollapse = useCallback(() => {
-    if (section.heading) {
-        setIsCollapsed(prev => !prev);
-    }
-  }, [section.heading]);
 
   const handleSave = () => {
     onSectionUpdate(section.startLine, section.endLine, editedContent);
@@ -916,7 +911,7 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
               React.createElement(
                 HeadingTag,
                 { key: i, id: headingData?.slug, className: headingClassName },
-                <button className={buttonClassName} onClick={handleToggleCollapse} aria-expanded={!isCollapsed} aria-controls={`section-content-${section.startLine}`}>
+                <button className={buttonClassName} onClick={onToggleCollapse} aria-expanded={!isCollapsed} aria-controls={`section-content-${section.startLine}`}>
                     {isCollapsed ? <ChevronRight className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" /> : <ChevronDown className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" />}
                     <span className="flex-grow"><InlineMarkdown text={text} /></span>
                 </button>
@@ -997,7 +992,7 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
       i++;
     }
     return elements;
-  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, handleToggleCollapse, isCollapsed, project, viewScope, isArchiveView, hideCompletedTasks]);
+  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, onToggleCollapse, isCollapsed, project, viewScope, isArchiveView, hideCompletedTasks]);
 
   const renderedNodes = useMemo(() => {
     if (isEditing) return null; // Prevent expensive render when editing
