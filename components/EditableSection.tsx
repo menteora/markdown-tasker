@@ -712,9 +712,6 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
   return (
     <>
     <div className="relative group bg-slate-800/30 hover:bg-slate-800/50 rounded-lg transition-colors duration-200">
-       {tocHeadings && section.heading?.level === 1 && !isArchiveView && (
-        <TableOfContents headings={tocHeadings} />
-       )}
        <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
         {!isArchiveView && completedTasksInSection.length > 0 && (
             <button 
