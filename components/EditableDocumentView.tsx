@@ -3,6 +3,10 @@ import { useSectionParser, Section } from '../hooks/useSectionParser';
 import type { User, Project, Heading, Task } from '../types';
 import EditableSection from './EditableSection';
 import { useProject } from '../contexts/ProjectContext';
+import { Download } from 'lucide-react';
+import saveAs from 'file-saver';
+import ConfirmationModal from './ConfirmationModal';
+
 
 interface EditableDocumentViewProps {
   markdown: string;
@@ -15,9 +19,27 @@ interface EditableDocumentViewProps {
 
 const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
   const { markdown, projects, viewScope, currentProjectIndex, isArchiveView, hideCompletedTasks } = props;
-  const { users, updateSection, moveSection, duplicateSection, toggleTask, updateTaskBlock, archiveSection, restoreSection, archiveTasks, reorderTask } = useProject();
+  const { users, updateSection, moveSection, duplicateSection, toggleTask, updateTaskBlock, archiveSection, restoreSection, archiveTasks, reorderTask, archiveMarkdown, clearArchive } = useProject();
   const sections = useSectionParser(markdown);
   const [collapsedSections, setCollapsedSections] = useState<Set<number>>(new Set());
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+
+  const handleExportArchive = useCallback(() => {
+    if (!archiveMarkdown.trim()) {
+        alert("Archive is empty. Nothing to export.");
+        return;
+    }
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `${date}_Archive.md`;
+    const blob = new Blob([archiveMarkdown], { type: 'text/markdown;charset=utf-8' });
+    saveAs(blob, filename);
+    setIsClearConfirmOpen(true);
+  }, [archiveMarkdown]);
+
+  const handleConfirmClearArchive = useCallback(() => {
+      clearArchive();
+      setIsClearConfirmOpen(false);
+  }, [clearArchive]);
 
   const handleToggleCollapse = useCallback((sectionStartLine: number) => {
     setCollapsedSections(prev => {
@@ -119,8 +141,21 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {isArchiveView && (
               <div className="mb-8 pb-4 border-b border-slate-700">
-                  <h1 className="text-3xl font-bold text-slate-100">Archive</h1>
-                  <p className="text-slate-400 mt-1">These sections have been archived. You can restore them to merge them back into the active project.</p>
+                  <div className="flex justify-between items-center">
+                      <div>
+                          <h1 className="text-3xl font-bold text-slate-100">Archive</h1>
+                          <p className="text-slate-400 mt-1">These sections have been archived. You can restore them to merge them back into the active project.</p>
+                      </div>
+                      <button
+                        onClick={handleExportArchive}
+                        disabled={!archiveMarkdown.trim()}
+                        className="flex items-center space-x-2 px-4 py-2 rounded-md transition-colors font-semibold bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed"
+                        title={!archiveMarkdown.trim() ? "Archive is empty" : "Export archive as a Markdown file"}
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Export Archive</span>
+                      </button>
+                  </div>
               </div>
             )}
             {(sections.length === 0 || (sections.length === 1 && !sections[0].content.trim())) && (
@@ -168,6 +203,20 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
                 })}
             </div>
         </div>
+        {isArchiveView && (
+            <ConfirmationModal
+                isOpen={isClearConfirmOpen}
+                onClose={() => setIsClearConfirmOpen(false)}
+                onConfirm={handleConfirmClearArchive}
+                title="Archive Exported"
+                confirmText="Yes, Clear Archive"
+                secondaryText="No, Keep Archive"
+                onSecondaryAction={() => setIsClearConfirmOpen(false)}
+            >
+                <p>The archive has been successfully exported as a Markdown file.</p>
+                <p className="mt-2 text-slate-400">Do you want to clear the archive content now?</p>
+            </ConfirmationModal>
+        )}
     </div>
   );
 };

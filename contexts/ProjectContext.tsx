@@ -103,6 +103,7 @@ interface ProjectContextType {
     restoreSection: (section: { startLine: number, endLine: number }) => void;
     archiveTasks: (tasksToArchive: Task[]) => void;
     reorderTask: (taskToMove: Task, direction: 'up' | 'down' | 'top' | 'bottom') => void;
+    clearArchive: () => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -364,7 +365,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const sectionHeadingNode = tree.children[startIndex];
             if (currentProject && sectionHeadingNode.type === 'heading') {
                 const sectionHeadingText = toString(sectionHeadingNode).trim();
-                const taskWithHierarchy = [...currentProject.unassignedTasks, ...Object.values(currentProject.groupedTasks).flatMap(g=>g.tasks)]
+                // FIX: Add explicit type annotation for the argument in flatMap to ensure correct type inference.
+                const taskWithHierarchy = [...currentProject.unassignedTasks, ...Object.values(currentProject.groupedTasks).flatMap((g: { user: User; tasks: Task[] }) => g.tasks)]
                     .find(t => t.sectionTitle === sectionHeadingText);
                 if (taskWithHierarchy && taskWithHierarchy.headingHierarchy.length > 1) {
                      hierarchy = taskWithHierarchy.headingHierarchy;
@@ -588,6 +590,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         reader.readAsText(file);
     }, [saveSettings]);
 
+    const clearArchive = useCallback(() => {
+        setArchiveMarkdown('');
+    }, []);
+
     const handleRequestLocalRestore = useCallback(() => {}, []);
 
     const value: ProjectContextType = {
@@ -595,7 +601,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         projects, archiveProjects, updateSection, toggleTask, updateTaskBlock, moveSection,
         duplicateSection, addBulkTaskUpdates, addUser, updateUser, deleteUser,
         importProject, handleRequestLocalRestore, archiveSection, restoreSection,
-        archiveTasks, reorderTask
+        archiveTasks, reorderTask, clearArchive
     };
 
     return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;
