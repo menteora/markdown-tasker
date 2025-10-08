@@ -1,8 +1,10 @@
+
 import { useMemo } from 'react';
 import { User, Task, GroupedTasks, TaskUpdate, Project, Heading } from '../types';
 import { remark } from 'remark';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
+import remarkStringify from 'remark-stringify';
 import { visit } from 'unist-util-visit';
 import { toString } from 'mdast-util-to-string';
 import type { Root, Heading as MdastHeading, ListItem, Paragraph } from 'mdast';
@@ -30,6 +32,16 @@ const slugify = (text: string, existingSlugs: Set<string>): string => {
   existingSlugs.add(slug);
   return slug;
 };
+
+const stringifier = remark()
+    .use(remarkGfm)
+    .use(remarkStringify, {
+        bullet: '-',
+        listItemIndent: 'one',
+        emphasis: '*',
+        rule: '-',
+        tightDefinitions: true,
+    });
 
 
 export const useMarkdownParser = (markdown: string, users: User[]): Project[] => {
@@ -70,11 +82,11 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
         // Step 2: Traverse the tree to find headings and tasks
         const headingStack: { text: string; level: number }[] = [];
         
-        const assigneeRegex = /\s\(@([a-zA-Z0-9_]+)\)/;
-        const dateRegex = /\s~([0-9]{4}-[0-9]{2}-[0-9]{2})/;
-        const costRegex = /\s\(\$(\d+(\.\d{1,2})?)\)/;
-        const creationDateRegex = /\s\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
-        const dueDateRegex = /\s!([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+        const assigneeRegex = /\s\\?\(@([a-zA-Z0-9_]+)\\?\)/;
+        const dateRegex = /\s\\?~([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+        const costRegex = /\s\\?\(\$(\d+(\.\d{1,2})?)\\?\)/;
+        const creationDateRegex = /\s\\?\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
+        const dueDateRegex = /\s\\?!([0-9]{4}-[0-9]{2}-[0-9]{2})/;
         const updateContentRegex = /^(\d{4}-\d{2}-\d{2}): (.*)/;
 
 
@@ -109,7 +121,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                 const paragraphNode = node.children.find(child => child.type === 'paragraph') as Paragraph | undefined;
                 if (!paragraphNode) return;
 
-                let fullTaskText = toString(paragraphNode);
+                let fullTaskText = stringifier.stringify({ type: 'paragraph', children: paragraphNode.children }).trim();
                 let assigneeAlias: string | null = null;
                 let completionDate: string | null = null;
                 let creationDate: string | null = null;
@@ -135,7 +147,8 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                 visit(node, 'list', (listNode) => {
                     visit(listNode, 'listItem', (updateItemNode: ListItem) => {
                         if (updateItemNode.position) {
-                            const updateTextContent = toString(updateItemNode);
+                            const paragraph = updateItemNode.children.find(c => c.type === 'paragraph') as Paragraph | undefined;
+                            const updateTextContent = paragraph ? stringifier.stringify({ type: 'paragraph', children: paragraph.children }).trim() : toString(updateItemNode);
                             const updateMatch = updateTextContent.match(updateContentRegex);
 
                             if (updateMatch) {

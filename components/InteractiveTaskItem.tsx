@@ -5,21 +5,7 @@ import { Pencil, Save, X, CheckCircle2, CalendarDays, ChevronRight, Archive, Che
 import InputModal from './InputModal';
 import DatePickerModal from './DatePickerModal';
 import TaskReorderControls from './TaskReorderControls';
-
-// Re-usable parsing functions and components
-const parseInlineMarkdown = (text: string): React.ReactNode[] => {
-  const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);
-  return parts.map((part, index) => {
-    if (!part) return null;
-    if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>;
-    const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
-    if (linkMatch) return <a key={index} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">{linkMatch[1]}</a>;
-    return part;
-  });
-};
-
-const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => <>{parseInlineMarkdown(text)}</>;
+import { InlineMarkdown } from '../lib/markdownUtils';
 
 // InteractiveTaskItem Component
 interface InteractiveTaskItemProps {
