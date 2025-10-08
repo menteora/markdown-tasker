@@ -136,7 +136,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             const tree = processor.parse(sourceMd);
             const result = updater(tree);
-            const newMd = processor.stringify(result || tree);
+            let newMd = processor.stringify(result || tree);
+            
+            // FIX: After stringifying, remark escapes underscores in aliases (e.g., @user_name becomes @user\_name).
+            // This regex finds all alias blocks `(@...)` and un-escapes only the underscores within them.
+            newMd = newMd.replace(/\(@([^)]+)\)/g, (match) => {
+                return match.replace(/\\_/g, '_');
+            });
+
             setter(newMd);
         } catch (error) {
             console.error("Failed to perform AST update:", error);
