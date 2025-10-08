@@ -3,6 +3,7 @@ import { User, Task, GroupedTasks, TaskUpdate, Project, Heading } from '../types
 import { remark } from 'remark';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
+import remarkStringify from 'remark-stringify';
 import { visit } from 'unist-util-visit';
 import { toString } from 'mdast-util-to-string';
 import type { Root, Heading as MdastHeading, ListItem, Paragraph } from 'mdast';
@@ -36,6 +37,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
     return useMemo(() => {
         const lines = markdown.split('\n');
         const processor = remark().use(remarkParse).use(remarkGfm);
+        const stringifier = remark().use(remarkStringify);
         const tree = processor.parse(markdown) as Root;
         const existingSlugs = new Set<string>();
         
@@ -109,7 +111,8 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                 const paragraphNode = node.children.find(child => child.type === 'paragraph') as Paragraph | undefined;
                 if (!paragraphNode) return;
 
-                let fullTaskText = toString(paragraphNode);
+                let fullTaskText = stringifier.stringify(paragraphNode).trim();
+
                 let assigneeAlias: string | null = null;
                 let completionDate: string | null = null;
                 let creationDate: string | null = null;
