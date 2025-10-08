@@ -82,7 +82,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
         // Step 2: Traverse the tree to find headings and tasks
         const headingStack: { text: string; level: number }[] = [];
         
-        const assigneeRegex = /\s\\?\(@([a-zA-Z0-9_]+)\\?\)/;
+        const assigneeRegex = /\s\\?\(@(.+?)\\?\)/;
         const dateRegex = /\s\\?~([0-9]{4}-[0-9]{2}-[0-9]{2})/;
         const costRegex = /\s\\?\(\$(\d+(\.\d{1,2})?)\\?\)/;
         const creationDateRegex = /\s\\?\+([0-9]{4}-[0-9]{2}-[0-9]{2})/;
@@ -135,7 +135,13 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                 if (costMatch) { cost = parseFloat(costMatch[1]); fullTaskText = fullTaskText.replace(costRegex, '').trim(); }
 
                 const assigneeMatch = fullTaskText.match(assigneeRegex);
-                if (assigneeMatch) { assigneeAlias = assigneeMatch[1]; fullTaskText = fullTaskText.replace(assigneeRegex, '').trim(); }
+                if (assigneeMatch) {
+                    const potentialAlias = assigneeMatch[1].replace(/\\_/g, '_');
+                    if (/^[a-zA-Z0-9_]+$/.test(potentialAlias)) {
+                        assigneeAlias = potentialAlias;
+                        fullTaskText = fullTaskText.replace(assigneeRegex, '').trim();
+                    }
+                }
                 
                 const creationDateMatch = fullTaskText.match(creationDateRegex);
                 if (creationDateMatch) { creationDate = creationDateMatch[1]; fullTaskText = fullTaskText.replace(creationDateRegex, '').trim(); }
@@ -155,7 +161,13 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                                 let updateText = updateMatch[2].trim();
                                 let updateAssigneeAlias: string | null = null;
                                 const updateAssigneeMatch = updateText.match(assigneeRegex);
-                                if(updateAssigneeMatch){ updateAssigneeAlias = updateAssigneeMatch[1]; updateText = updateText.replace(assigneeRegex, '').trim(); }
+                                if(updateAssigneeMatch){
+                                    const potentialAlias = updateAssigneeMatch[1].replace(/\\_/g, '_');
+                                    if (/^[a-zA-Z0-9_]+$/.test(potentialAlias)) {
+                                        updateAssigneeAlias = potentialAlias;
+                                        updateText = updateText.replace(assigneeRegex, '').trim();
+                                    }
+                                }
 
                                 updates.push({
                                     lineIndex: updateItemNode.position.start.line - 1,
