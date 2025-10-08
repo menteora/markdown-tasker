@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import type { User, Task } from '../types';
 import { CheckCircle2, Circle, AlertTriangle, Calendar, Clock, Inbox, ArrowRight } from 'lucide-react';
 import { useProject } from '../contexts/ProjectContext';
+import { InlineMarkdown } from '../lib/markdownUtils';
 
 type ViewScope = 'single' | 'all';
 
@@ -10,19 +11,6 @@ interface TimelineViewProps {
   viewScope: ViewScope;
   onNavigate: (projectTitle: string, sectionSlug: string) => void;
 }
-
-const parseInlineMarkdown = (text: string): React.ReactNode[] => {
-  const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);
-  return parts.map((part, index) => {
-    if (!part) return null;
-    if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>;
-    const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
-    if (linkMatch) return <a key={index} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">{linkMatch[1]}</a>;
-    return part;
-  });
-};
-const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => <>{parseInlineMarkdown(text)}</>;
 
 const TimelineTaskItem: React.FC<{ task: Task; user: User | null; viewScope: ViewScope; onNavigate: (projectTitle: string, sectionSlug: string) => void; }> = ({ task, user, viewScope, onNavigate }) => {
   return (

@@ -5,34 +5,7 @@ import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2, C
 import ConfirmationModal from './ConfirmationModal';
 import { useProject } from '../contexts/ProjectContext';
 import TaskEditModal from './TaskEditModal';
-
-const formatMarkdownForEmail = (text: string): string => {
-  const linkRegex = /\[(.*?)\]\((.*?)\)/g;
-  return text.replace(linkRegex, (_match, linkText, url) => `${linkText} (${url})`);
-};
-
-const parseInlineMarkdown = (text: string): React.ReactNode[] => {
-  const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);
-  
-  return parts.map((part, index) => {
-    if (!part) return null;
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
-    }
-    if (part.startsWith('*') && part.endsWith('*')) {
-      return <em key={index}>{part.slice(1, -1)}</em>;
-    }
-    const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
-    if (linkMatch) {
-      return <a key={index} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">{linkMatch[1]}</a>;
-    }
-    return part;
-  });
-};
-
-const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => {
-    return <>{parseInlineMarkdown(text)}</>;
-};
+import { InlineMarkdown, formatMarkdownForEmail } from '../lib/markdownUtils';
 
 type ViewScope = 'single' | 'all';
 

@@ -11,6 +11,7 @@ import TableOfContents from './TableOfContents';
 import ConfirmationModal from './ConfirmationModal';
 import { useProject } from '../contexts/ProjectContext';
 import InteractiveTaskItem from './InteractiveTaskItem';
+import { InlineMarkdown } from '../lib/markdownUtils';
 
 // Autocomplete Component for @ mentions
 interface MentionAutocompleteProps {
@@ -58,23 +59,6 @@ const MentionAutocomplete: React.FC<MentionAutocompleteProps> = ({ users, positi
         </div>
     );
 };
-
-
-// Re-usable parsing functions and components
-const parseInlineMarkdown = (text: string): React.ReactNode[] => {
-  const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g);
-  return parts.map((part, index) => {
-    if (!part) return null;
-    if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>;
-    const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
-    if (linkMatch) return <a key={index} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">{linkMatch[1]}</a>;
-    return part;
-  });
-};
-
-const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => <>{parseInlineMarkdown(text)}</>;
-
 
 // The Main EditableSection Component
 interface EditableSectionProps {
@@ -132,8 +116,8 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
     
     const allProjectTasks = [
         ...project.unassignedTasks,
-        // FIX: Add explicit type for 'g' to resolve TS error.
-        ...Object.values(project.groupedTasks).flatMap((g: { user: User; tasks: Task[] }) => g.tasks)
+        // FIX: Cast Object.values to fix type inference issue with flatMap.
+        ...(Object.values(project.groupedTasks) as Array<{ user: User, tasks: Task[] }>).flatMap(g => g.tasks)
     ];
 
     const sectionAbsoluteStart = projectStartLine + section.startLine;
@@ -500,8 +484,8 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
         const projectForTask = project;
         if (projectForTask) {
             const absoluteLineIndex = projectStartLine + section.startLine + startIndex;
-            // FIX: Add explicit type for 'g' to resolve TS error.
-            const taskFromContext = [...projectForTask.unassignedTasks, ...Object.values(projectForTask.groupedTasks).flatMap((g: { user: User, tasks: Task[] }) => g.tasks)].find(t => t.lineIndex === absoluteLineIndex);
+            // FIX: Cast Object.values to fix type inference issue with flatMap.
+            const taskFromContext = [...projectForTask.unassignedTasks, ...(Object.values(projectForTask.groupedTasks) as Array<{ user: User, tasks: Task[] }>).flatMap(g => g.tasks)].find(t => t.lineIndex === absoluteLineIndex);
             if (taskFromContext) {
                  assignee = taskFromContext.assigneeAlias ? userByAlias.get(taskFromContext.assigneeAlias) ?? null : null;
                  completionDate = taskFromContext.completionDate;
