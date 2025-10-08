@@ -56,6 +56,7 @@ const processor = remark()
         listItemIndent: 'one',
         rule: '-',
         tightDefinitions: true,
+        emphasis: '*',
     });
 
 const loadProjectFromStorage = () => {
