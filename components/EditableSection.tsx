@@ -132,7 +132,8 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
     
     const allProjectTasks = [
         ...project.unassignedTasks,
-        ...Object.values(project.groupedTasks).flatMap((g) => g.tasks)
+        // FIX: Add explicit type for 'g' to resolve TS error.
+        ...Object.values(project.groupedTasks).flatMap((g: { user: User; tasks: Task[] }) => g.tasks)
     ];
 
     const sectionAbsoluteStart = projectStartLine + section.startLine;
@@ -499,7 +500,8 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
         const projectForTask = project;
         if (projectForTask) {
             const absoluteLineIndex = projectStartLine + section.startLine + startIndex;
-            const taskFromContext = [...projectForTask.unassignedTasks, ...Object.values(projectForTask.groupedTasks).flatMap(g => g.tasks)].find(t => t.lineIndex === absoluteLineIndex);
+            // FIX: Add explicit type for 'g' to resolve TS error.
+            const taskFromContext = [...projectForTask.unassignedTasks, ...Object.values(projectForTask.groupedTasks).flatMap((g: { user: User, tasks: Task[] }) => g.tasks)].find(t => t.lineIndex === absoluteLineIndex);
             if (taskFromContext) {
                  assignee = taskFromContext.assigneeAlias ? userByAlias.get(taskFromContext.assigneeAlias) ?? null : null;
                  completionDate = taskFromContext.completionDate;
@@ -615,6 +617,13 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
             const text = hMatch[2].trim();
             const headingData = tocHeadingsForSlugs?.find(h => h.line === (viewScope === 'single' && !isArchiveView ? relativeLineIndex + project.startLine : relativeLineIndex));
             
+            let slugForId: string | undefined;
+            if (level === 1) {
+                slugForId = project?.slug;
+            } else {
+                slugForId = headingData?.slug;
+            }
+            
             let headingClassName: string;
             let buttonClassName = "font-bold flex items-center w-full text-left transition-colors hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded p-1 -ml-1";
             
@@ -625,7 +634,7 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
             }
   
             const HeadingTag = `h${level}`;
-            elements.push(React.createElement(HeadingTag, { key: i, id: headingData?.slug, className: headingClassName },
+            elements.push(React.createElement(HeadingTag, { key: i, id: slugForId, className: headingClassName },
                 <button className={buttonClassName} onClick={onToggleCollapse} aria-expanded={!isCollapsed} aria-controls={`section-content-${section.startLine}`}>
                     {isCollapsed ? <ChevronRight className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" /> : <ChevronDown className="w-5 h-5 mr-2 flex-shrink-0 text-slate-400" />}
                     <span className="flex-grow"><InlineMarkdown text={text} /></span>
