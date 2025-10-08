@@ -24,6 +24,7 @@ export interface Task {
   dueDate?: string | null;
   updates: TaskUpdate[];
   projectTitle: string;
+  projectSlug?: string;
   cost?: number;
   blockEndLine: number;
   sectionTitle?: string;
@@ -53,6 +54,7 @@ export interface Project {
   startLine: number;
   endLine: number;
   headings: Heading[];
+  slug?: string;
 }
 
 export interface Settings {

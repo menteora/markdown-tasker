@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useMemo, useCallback } from 'react';
 import type { User, Task, GroupedTasks, Settings } from '../types';
 import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2, CalendarDays, Pencil } from 'lucide-react';
@@ -75,11 +72,6 @@ const TaskItem: React.FC<{
   
     const dueDateInfo = getDueDateInfo(task.dueDate, task.completed);
     
-    const contextPath = [
-        viewScope === 'all' ? task.projectTitle : null,
-        task.sectionTitle
-    ].filter(Boolean).join(' > ');
-
     return (
       <div className="flex items-start space-x-3 group relative">
         {task.completed ? (
@@ -102,17 +94,42 @@ const TaskItem: React.FC<{
                 {dueDateInfo.label}
              </span>
            )}
-           {contextPath && task.sectionSlug ? (
-              <button 
-                onClick={() => onNavigate(task.projectTitle, task.sectionSlug!)} 
-                className="block text-xs text-indigo-400 font-medium mt-1 hover:underline text-left"
-                title={`Go to section: ${task.sectionTitle}`}
-              >
-                {contextPath}
-              </button>
-            ) : viewScope === 'all' ? (
-              <span className="block text-xs text-slate-500 font-medium mt-1">{task.projectTitle}</span>
-            ) : null}
+           {(() => {
+              const contextPath = [
+                  viewScope === 'all' ? task.projectTitle : null,
+                  task.sectionTitle
+              ].filter(Boolean).join(' > ');
+
+              if (task.sectionSlug) {
+                  return (
+                      <button 
+                        onClick={() => onNavigate(task.projectTitle, task.sectionSlug!)} 
+                        className="block text-xs text-indigo-400 font-medium mt-1 hover:underline text-left"
+                        title={`Go to section: ${task.sectionTitle}`}
+                      >
+                        {contextPath}
+                      </button>
+                  );
+              }
+              
+              if (viewScope === 'all' && task.projectSlug) {
+                  return (
+                      <button 
+                        onClick={() => onNavigate(task.projectTitle, task.projectSlug!)} 
+                        className="block text-xs text-indigo-400 font-medium mt-1 hover:underline text-left"
+                        title={`Go to project: ${task.projectTitle}`}
+                      >
+                        {task.projectTitle}
+                      </button>
+                  );
+              }
+              
+              if (viewScope === 'all') {
+                  return <span className="block text-xs text-slate-500 font-medium mt-1">{task.projectTitle}</span>;
+              }
+
+              return null;
+          })()}
           {task.creationDate && (
             <span className="block text-xs text-slate-400">
               Created: {task.creationDate}

@@ -53,11 +53,12 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
         });
 
         if (projectBoundaries.length === 0) {
-            projects.push({ title: 'Project Overview', startLine: 0, endLine: lines.length - 1, headings: [], groupedTasks: {}, unassignedTasks: [], totalCost: 0 });
+            projects.push({ title: 'Project Overview', slug: 'project-overview', startLine: 0, endLine: lines.length - 1, headings: [], groupedTasks: {}, unassignedTasks: [], totalCost: 0 });
         } else {
             projectBoundaries.forEach((boundary, idx) => {
                 const endLine = (idx + 1 < projectBoundaries.length) ? projectBoundaries[idx + 1].startLine - 1 : lines.length - 1;
-                projects.push({ title: boundary.title, startLine: boundary.startLine, endLine: endLine, headings: [], groupedTasks: {}, unassignedTasks: [], totalCost: 0 });
+                const slug = slugify(boundary.title, existingSlugs);
+                projects.push({ title: boundary.title, slug, startLine: boundary.startLine, endLine: endLine, headings: [], groupedTasks: {}, unassignedTasks: [], totalCost: 0 });
             });
         }
 
@@ -156,7 +157,8 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                     return 'skip';
                 });
                 
-                const currentProjectTitle = projects[projectIdx]?.title || 'Project Overview';
+                const currentProject = projects[projectIdx];
+                const currentProjectTitle = currentProject?.title || 'Project Overview';
                 const sectionHeading = headingStack.length > 1 ? headingStack[headingStack.length - 1] : null;
 
                 const task: Task = {
@@ -169,6 +171,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                     dueDate,
                     updates,
                     projectTitle: currentProjectTitle,
+                    projectSlug: currentProject?.slug,
                     cost,
                     blockEndLine: node.position.end.line - 1,
                     sectionTitle: sectionHeading?.text,

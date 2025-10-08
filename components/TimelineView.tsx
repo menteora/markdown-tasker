@@ -25,11 +25,6 @@ const parseInlineMarkdown = (text: string): React.ReactNode[] => {
 const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => <>{parseInlineMarkdown(text)}</>;
 
 const TimelineTaskItem: React.FC<{ task: Task; user: User | null; viewScope: ViewScope; onNavigate: (projectTitle: string, sectionSlug: string) => void; }> = ({ task, user, viewScope, onNavigate }) => {
-  const contextPath = [
-    viewScope === 'all' ? task.projectTitle : null,
-    task.sectionTitle
-  ].filter(Boolean).join(' > ');
-  
   return (
     <div className="flex items-start space-x-3 p-3 bg-slate-800/50 rounded-md">
       {task.completed ? (
@@ -49,17 +44,42 @@ const TimelineTaskItem: React.FC<{ task: Task; user: User | null; viewScope: Vie
             </div>
           )}
         </div>
-        {contextPath && task.sectionSlug ? (
-          <button 
-            onClick={() => onNavigate(task.projectTitle, task.sectionSlug!)} 
-            className="block text-xs text-indigo-400 font-medium mt-1 hover:underline text-left"
-            title={`Go to section: ${task.sectionTitle}`}
-          >
-            {contextPath}
-          </button>
-        ) : viewScope === 'all' ? (
-          <span className="block text-xs text-slate-500 font-medium mt-1">{task.projectTitle}</span>
-        ) : null}
+        {(() => {
+            const contextPath = [
+                viewScope === 'all' ? task.projectTitle : null,
+                task.sectionTitle
+            ].filter(Boolean).join(' > ');
+
+            if (task.sectionSlug) {
+                return (
+                    <button 
+                      onClick={() => onNavigate(task.projectTitle, task.sectionSlug!)} 
+                      className="block text-xs text-indigo-400 font-medium mt-1 hover:underline text-left"
+                      title={`Go to section: ${task.sectionTitle}`}
+                    >
+                      {contextPath}
+                    </button>
+                );
+            }
+            
+            if (viewScope === 'all' && task.projectSlug) {
+                return (
+                    <button 
+                      onClick={() => onNavigate(task.projectTitle, task.projectSlug!)} 
+                      className="block text-xs text-indigo-400 font-medium mt-1 hover:underline text-left"
+                      title={`Go to project: ${task.projectTitle}`}
+                    >
+                      {task.projectTitle}
+                    </button>
+                );
+            }
+            
+            if (viewScope === 'all') {
+                return <span className="block text-xs text-slate-500 font-medium mt-1">{task.projectTitle}</span>;
+            }
+
+            return null;
+        })()}
       </div>
       <span className="text-xs font-mono whitespace-nowrap text-slate-400">{task.dueDate}</span>
     </div>
