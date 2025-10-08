@@ -153,12 +153,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const updateSection = useCallback((startLine: number, endLine: number, newContent: string, isArchive: boolean) => {
         performAstUpdate(tree => {
-            const newSectionTree = processor.parse(newContent);
-    
             const startNodeIndex = tree.children.findIndex(node => node.position && node.position.start.line - 1 >= startLine);
     
             if (startNodeIndex === -1) {
-                if (startLine === 0) {
+                if (startLine === 0 && newContent.trim()) {
+                    const newSectionTree = processor.parse(newContent);
                     tree.children.unshift(...newSectionTree.children);
                 }
                 return;
@@ -178,7 +177,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }
     
             const nodesToRemove = endNodeIndex - startNodeIndex + 1;
-            tree.children.splice(startNodeIndex, nodesToRemove, ...newSectionTree.children);
+
+            if (newContent.trim() === '') {
+                // Explicitly handle section deletion
+                tree.children.splice(startNodeIndex, nodesToRemove);
+            } else {
+                const newSectionTree = processor.parse(newContent);
+                tree.children.splice(startNodeIndex, nodesToRemove, ...newSectionTree.children);
+            }
         }, isArchive);
     }, [performAstUpdate]);
 
