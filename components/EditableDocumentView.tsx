@@ -16,11 +16,12 @@ interface EditableDocumentViewProps {
   currentProjectIndex: number;
   isArchiveView?: boolean;
   hideCompletedTasks?: boolean;
+  showPinnedOnly?: boolean;
 }
 
 const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
-  const { markdown, projects, viewScope, currentProjectIndex, isArchiveView, hideCompletedTasks } = props;
-  const { users, updateSection, moveSection, duplicateSection, toggleTask, updateTaskBlock, archiveSection, restoreSection, archiveTasks, reorderTask, archiveMarkdown, clearArchive } = useProject();
+  const { markdown, projects, viewScope, currentProjectIndex, isArchiveView, hideCompletedTasks, showPinnedOnly } = props;
+  const { users, updateSection, moveSection, duplicateSection, toggleTask, toggleTaskPin, updateTaskBlock, archiveSection, restoreSection, archiveTasks, reorderTask, archiveMarkdown, clearArchive } = useProject();
   const sections = useSectionParser(markdown);
   const [collapsedSections, setCollapsedSections] = useState<Set<number>>(new Set());
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
@@ -136,6 +137,10 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
     // lineIndex received from InteractiveTaskItem is already absolute
     toggleTask(lineIndex, isCompleted);
   }, [toggleTask]);
+  
+  const handleToggleTaskPin = useCallback((lineIndex: number) => {
+    toggleTaskPin(lineIndex);
+  }, [toggleTaskPin]);
 
   const handleUpdateTaskBlock = useCallback((startLine: number, lineCount: number, newContent: string) => {
     // startLine received from InteractiveTaskItem is already an absolute line index
@@ -217,6 +222,7 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
                                 onMoveSection={handleMoveSectionWithOffset}
                                 onDuplicateSection={handleDuplicateSectionWithOffset}
                                 onToggle={handleToggleTask}
+                                onTogglePin={handleToggleTaskPin}
                                 onUpdateTaskBlock={handleUpdateTaskBlock}
                                 onArchiveSection={handleArchiveSection}
                                 onRestoreSection={handleRestoreSection}
@@ -229,6 +235,7 @@ const EditableDocumentView: React.FC<EditableDocumentViewProps> = (props) => {
                                 projectStartLine={projectStartLine}
                                 isArchiveView={isArchiveView}
                                 hideCompletedTasks={hideCompletedTasks}
+                                showPinnedOnly={showPinnedOnly}
                                 isCollapsed={collapsedSections.has(section.startLine)}
                                 onToggleCollapse={() => handleToggleCollapse(section.startLine)}
                             />

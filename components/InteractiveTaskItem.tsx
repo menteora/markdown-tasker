@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { User, TaskUpdate, Task, Heading, Project } from '../types';
 import Toolbar from './Toolbar';
-import { Pencil, Save, X, CheckCircle2, CalendarDays, ChevronRight, Archive, ChevronsUp, ChevronUp, ChevronDown, ChevronsDown } from 'lucide-react';
+import { Pencil, Save, X, CheckCircle2, CalendarDays, ChevronRight, Archive, Pin } from 'lucide-react';
 import InputModal from './InputModal';
 import DatePickerModal from './DatePickerModal';
 import TaskReorderControls from './TaskReorderControls';
@@ -12,6 +12,7 @@ interface InteractiveTaskItemProps {
     task: Task;
     taskBlockContent: string;
     onToggle: (absoluteLineIndex: number, isCompleted: boolean) => void;
+    onTogglePin: (absoluteLineIndex: number) => void;
     onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
     users: User[];
     isArchiveView?: boolean;
@@ -21,7 +22,7 @@ interface InteractiveTaskItemProps {
     totalTasksInList: number;
 }
 
-const InteractiveTaskItem: React.FC<InteractiveTaskItemProps> = ({ task, taskBlockContent, onToggle, onUpdateTaskBlock, users, isArchiveView, onArchiveTask, onReorderTask, taskIndexInList, totalTasksInList }) => {
+const InteractiveTaskItem: React.FC<InteractiveTaskItemProps> = ({ task, taskBlockContent, onToggle, onTogglePin, onUpdateTaskBlock, users, isArchiveView, onArchiveTask, onReorderTask, taskIndexInList, totalTasksInList }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(taskBlockContent);
   const [areUpdatesVisible, setAreUpdatesVisible] = useState(false);
@@ -377,6 +378,15 @@ const InteractiveTaskItem: React.FC<InteractiveTaskItemProps> = ({ task, taskBlo
                         canMoveUp={taskIndexInList > 0}
                         canMoveDown={taskIndexInList < totalTasksInList - 1}
                     />
+                )}
+                {!isArchiveView && (
+                    <button 
+                        onClick={() => onTogglePin(task.lineIndex)} 
+                        className={`p-2 rounded-full hover:bg-slate-700 ${task.pinned ? 'text-yellow-400' : 'text-slate-400'}`}
+                        title={task.pinned ? "Unpin task" : "Pin task"}
+                    >
+                        <Pin className={`w-4 h-4 ${task.pinned ? 'fill-current' : ''}`} />
+                    </button>
                 )}
                 {!isArchiveView && task.completed && (
                     <button 

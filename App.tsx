@@ -3,7 +3,7 @@ import UserManagement from './components/UserManagement';
 import ProjectOverview from './components/ProjectOverview';
 import ProjectActions from './components/ProjectActions';
 import type { User, Project, GroupedTasks, Task, Settings, FullProjectState, BackupRecord } from './types';
-import { ChevronsUpDown, Settings as SettingsIcon, Pencil, Archive, EyeOff } from 'lucide-react';
+import { ChevronsUpDown, Settings as SettingsIcon, Pencil, Archive, EyeOff, Pin } from 'lucide-react';
 import SettingsModal from './components/SettingsModal';
 import EditableDocumentView from './components/EditableDocumentView';
 import FullDocumentEditor from './components/FullDocumentEditor';
@@ -122,6 +122,7 @@ const App: React.FC = () => {
   const [restoreConfirmation, setRestoreConfirmation] = useState<{ isOpen: boolean; data: FullProjectState | null }>({ isOpen: false, data: null });
   const [scrollToSlug, setScrollToSlug] = useState<string | null>(null);
   const [hideCompletedTasks, setHideCompletedTasks] = useState(false);
+  const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   
   // Cloud state
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
@@ -261,25 +262,29 @@ const App: React.FC = () => {
   }, [projects, users]);
 
   const dataForOverview = useMemo(() => {
-    const source = viewScope === 'all' ? aggregatedData : currentProject;
-    if (!hideCompletedTasks) return source;
+      const source = viewScope === 'all' ? aggregatedData : currentProject;
+      let processedSource = { ...source };
 
-    const filteredGroupedTasks = Object.entries(source.groupedTasks).reduce((acc, [alias, group]: [string, { user: User; tasks: Task[] }]) => {
-        acc[alias] = {
-            ...group,
-            tasks: group.tasks.filter(t => !t.completed)
-        };
-        return acc;
-    }, {} as GroupedTasks);
+      if (hideCompletedTasks) {
+          const filteredGroupedTasks = Object.entries(processedSource.groupedTasks).reduce((acc, [alias, group]: [string, { user: User; tasks: Task[] }]) => {
+              acc[alias] = { ...group, tasks: group.tasks.filter(t => !t.completed) };
+              return acc;
+          }, {} as GroupedTasks);
+          const filteredUnassignedTasks = processedSource.unassignedTasks.filter(t => !t.completed);
+          processedSource = { ...processedSource, groupedTasks: filteredGroupedTasks, unassignedTasks: filteredUnassignedTasks };
+      }
 
-    const filteredUnassignedTasks = source.unassignedTasks.filter(t => !t.completed);
+      if (showPinnedOnly) {
+          const filteredGroupedTasks = Object.entries(processedSource.groupedTasks).reduce((acc, [alias, group]: [string, { user: User; tasks: Task[] }]) => {
+              acc[alias] = { ...group, tasks: group.tasks.filter(t => t.pinned) };
+              return acc;
+          }, {} as GroupedTasks);
+          const filteredUnassignedTasks = processedSource.unassignedTasks.filter(t => t.pinned);
+          processedSource = { ...processedSource, groupedTasks: filteredGroupedTasks, unassignedTasks: filteredUnassignedTasks };
+      }
 
-    return {
-        ...source,
-        groupedTasks: filteredGroupedTasks,
-        unassignedTasks: filteredUnassignedTasks,
-    };
-  }, [viewScope, aggregatedData, currentProject, hideCompletedTasks]);
+      return processedSource;
+  }, [viewScope, aggregatedData, currentProject, hideCompletedTasks, showPinnedOnly]);
 
   const tasksForTimeline = useMemo(() => {
     const sourceProjects = viewScope === 'all' ? projects : (currentProject ? [currentProject] : []);
@@ -486,6 +491,7 @@ const App: React.FC = () => {
               currentProjectIndex={currentProjectIndex}
               isArchiveView={view === 'archive'}
               hideCompletedTasks={hideCompletedTasks}
+              showPinnedOnly={showPinnedOnly}
             />
         );
       case 'users':
@@ -571,21 +577,40 @@ const App: React.FC = () => {
             </button>
           </nav>
            {(view === 'overview' || view === 'editor') && !isFullEditMode && (
-            <div className="flex items-center p-1 bg-slate-800 rounded-md border border-slate-700" title="Toggle visibility of completed tasks">
-              <label htmlFor="hide-completed-toggle" className="flex items-center cursor-pointer text-sm font-medium text-slate-300 select-none">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    id="hide-completed-toggle"
-                    className="sr-only"
-                    checked={hideCompletedTasks}
-                    onChange={e => setHideCompletedTasks(e.target.checked)}
-                  />
-                  <div className={`block w-9 h-5 rounded-full transition-colors ${hideCompletedTasks ? 'bg-indigo-600' : 'bg-slate-600'}`}></div>
-                  <div className={`dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform ${hideCompletedTasks ? 'transform translate-x-4' : ''}`}></div>
-                </div>
-                <span className="ml-2 pr-1 flex items-center gap-1.5"><EyeOff className="w-4 h-4" />Hide Completed</span>
-              </label>
+            <div className="flex items-center p-1 bg-slate-800 rounded-md border border-slate-700 space-x-2">
+              <div title="Toggle visibility of completed tasks">
+                <label htmlFor="hide-completed-toggle" className="flex items-center cursor-pointer text-sm font-medium text-slate-300 select-none">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      id="hide-completed-toggle"
+                      className="sr-only"
+                      checked={hideCompletedTasks}
+                      onChange={e => setHideCompletedTasks(e.target.checked)}
+                    />
+                    <div className={`block w-9 h-5 rounded-full transition-colors ${hideCompletedTasks ? 'bg-indigo-600' : 'bg-slate-600'}`}></div>
+                    <div className={`dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform ${hideCompletedTasks ? 'transform translate-x-4' : ''}`}></div>
+                  </div>
+                  <span className="ml-2 pr-1 flex items-center gap-1.5"><EyeOff className="w-4 h-4" />Hide Completed</span>
+                </label>
+              </div>
+              <div className="w-px h-5 bg-slate-700"></div>
+              <div title="Show only pinned tasks">
+                <label htmlFor="show-pinned-toggle" className="flex items-center cursor-pointer text-sm font-medium text-slate-300 select-none">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      id="show-pinned-toggle"
+                      className="sr-only"
+                      checked={showPinnedOnly}
+                      onChange={e => setShowPinnedOnly(e.target.checked)}
+                    />
+                    <div className={`block w-9 h-5 rounded-full transition-colors ${showPinnedOnly ? 'bg-yellow-500' : 'bg-slate-600'}`}></div>
+                    <div className={`dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform ${showPinnedOnly ? 'transform translate-x-4' : ''}`}></div>
+                  </div>
+                  <span className="ml-2 pr-1 flex items-center gap-1.5"><Pin className="w-4 h-4" />Show Pinned</span>
+                </label>
+              </div>
             </div>
           )}
           {view === 'editor' && !isFullEditMode && (
