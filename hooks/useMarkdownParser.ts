@@ -1,4 +1,3 @@
-
 import { useMemo } from 'react';
 import { User, Task, GroupedTasks, TaskUpdate, Project, Heading } from '../types';
 import { remark } from 'remark';
@@ -122,6 +121,13 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                 if (!paragraphNode) return;
 
                 let fullTaskText = stringifier.stringify({ type: 'paragraph', children: paragraphNode.children }).trim();
+                
+                const pinRegex = /\s*📌\s*$/;
+                const pinned = pinRegex.test(fullTaskText);
+                if (pinned) {
+                    fullTaskText = fullTaskText.replace(pinRegex, '');
+                }
+
                 let assigneeAlias: string | null = null;
                 let completionDate: string | null = null;
                 let creationDate: string | null = null;
@@ -190,6 +196,7 @@ export const useMarkdownParser = (markdown: string, users: User[]): Project[] =>
                     lineIndex: node.position.start.line - 1,
                     text: fullTaskText,
                     completed: node.checked,
+                    pinned,
                     assigneeAlias,
                     creationDate,
                     completionDate,

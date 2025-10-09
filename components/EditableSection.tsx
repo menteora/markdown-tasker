@@ -70,6 +70,7 @@ interface EditableSectionProps {
   onMoveSection: (sectionToMove: {startLine: number, endLine: number}, destinationLine: number) => void;
   onDuplicateSection: (sectionToDuplicate: {startLine: number, endLine: number}, destinationLine: number) => void;
   onToggle: (lineIndex: number, isCompleted: boolean) => void;
+  onTogglePin: (lineIndex: number) => void;
   onUpdateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string) => void;
   onArchiveSection: (startLine: number, endLine: number, projectTitle: string) => void;
   onRestoreSection: (startLine: number, endLine: number) => void;
@@ -81,12 +82,13 @@ interface EditableSectionProps {
   projectStartLine: number;
   isArchiveView?: boolean;
   hideCompletedTasks?: boolean;
+  showPinnedOnly?: boolean;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
 }
 
 const EditableSection: React.FC<EditableSectionProps> = (props) => {
-  const { section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, onArchiveSection, onRestoreSection, tocHeadings, viewScope, project, projectStartLine, isArchiveView, hideCompletedTasks, isCollapsed, onToggleCollapse, onArchiveTasks, onReorderTask } = props;
+  const { section, sectionIndex, allSections, onSectionUpdate, onMoveSection, onDuplicateSection, onArchiveSection, onRestoreSection, tocHeadings, viewScope, project, projectStartLine, isArchiveView, hideCompletedTasks, showPinnedOnly, isCollapsed, onToggleCollapse, onArchiveTasks, onReorderTask } = props;
   const { markdown } = useProject();
   const [isEditing, setIsEditing] = useState(() => !section.content.trim());
   const [editedContent, setEditedContent] = useState(section.content);
@@ -470,16 +472,17 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
   
     const findFullTaskBlock = (startIndex: number): { task: Task | null; endIndex: number } => {
         const line = lines[startIndex];
-        const taskMatch = line.match(/^- \[( |x)\] (.*)/);
+        const taskMatch = line.match(/^- \[( |x)\](.*)/);
         if (!taskMatch) return { task: null, endIndex: startIndex };
 
-        let fullTaskText = taskMatch[2];
+        let fullTaskText = taskMatch[2].trim();
         let assignee: User | null = null;
         let completionDate: string | null = null;
         let creationDate: string | null = null;
         let cost: number | undefined = undefined;
         let dueDate: string | null = null;
         let headingHierarchy: { text: string; level: number }[] = [];
+        let pinned = false;
 
         const projectForTask = project;
         if (projectForTask) {
@@ -494,6 +497,7 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
                  dueDate = taskFromContext.dueDate ?? null;
                  headingHierarchy = taskFromContext.headingHierarchy;
                  fullTaskText = taskFromContext.text;
+                 pinned = taskFromContext.pinned;
             }
         }
         
@@ -529,6 +533,7 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
             lineIndex: absoluteLineIndex,
             text: fullTaskText,
             completed: taskMatch[1] === 'x',
+            pinned,
             assigneeAlias: assignee?.alias ?? null,
             creationDate,
             completionDate,
@@ -554,17 +559,20 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
             while (currentParseIndex < lines.length) {
                 const { task, endIndex } = findFullTaskBlock(currentParseIndex);
                 if (task) {
-                    if (hideCompletedTasks && task.completed && !isArchiveView) {
-                    } else {
-                       taskList.push(task);
-                    }
+                    taskList.push(task);
                     currentParseIndex = endIndex;
                 } else {
                     break;
                 }
             }
             
-            taskList.forEach((task, taskIndex) => {
+            const filteredTasks = taskList.filter(task => {
+                if (hideCompletedTasks && task.completed && !isArchiveView) return false;
+                if (showPinnedOnly && !task.pinned) return false;
+                return true;
+            });
+
+            filteredTasks.forEach((task, taskIndex) => {
                 const blockLineCount = task.blockEndLine - task.lineIndex + 1;
                 const taskBlockContent = markdown.split('\n').slice(task.lineIndex, task.lineIndex + blockLineCount).join('\n');
 
@@ -574,13 +582,14 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
                         task={task}
                         taskBlockContent={taskBlockContent}
                         onToggle={props.onToggle}
+                        onTogglePin={props.onTogglePin}
                         onUpdateTaskBlock={props.onUpdateTaskBlock}
                         users={props.users} 
                         isArchiveView={isArchiveView}
                         onArchiveTask={(taskToArchive) => onArchiveTasks([taskToArchive])}
                         onReorderTask={onReorderTask}
                         taskIndexInList={taskIndex}
-                        totalTasksInList={taskList.length}
+                        totalTasksInList={filteredTasks.length}
                     />
                 );
             });
@@ -644,7 +653,7 @@ const EditableSection: React.FC<EditableSectionProps> = (props) => {
         i++;
     }
     return elements;
-  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onUpdateTaskBlock, userByAlias, onToggleCollapse, isCollapsed, project, viewScope, isArchiveView, hideCompletedTasks, markdown, projectStartLine, onArchiveTasks, onReorderTask]);
+  }, [section.content, section.startLine, section.heading, props.users, props.onToggle, props.onTogglePin, props.onUpdateTaskBlock, userByAlias, onToggleCollapse, isCollapsed, project, viewScope, isArchiveView, hideCompletedTasks, showPinnedOnly, markdown, projectStartLine, onArchiveTasks, onReorderTask]);
 
   const renderedNodes = useMemo(() => {
     if (isEditing) return null;

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import type { User, Task, GroupedTasks, Settings } from '../types';
-import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2, CalendarDays, Pencil } from 'lucide-react';
+import { CheckCircle2, Circle, Users, Mail, DollarSign, ListChecks, BarChart2, CalendarDays, Pencil, Pin } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
 import { useProject } from '../contexts/ProjectContext';
 import TaskEditModal from './TaskEditModal';
@@ -22,8 +22,9 @@ const TaskItem: React.FC<{
     task: Task; 
     viewScope: ViewScope; 
     onEdit: (task: Task) => void;
+    onTogglePin: (lineIndex: number) => void;
     onNavigate: (projectTitle: string, sectionSlug: string) => void;
-}> = ({ task, viewScope, onEdit, onNavigate }) => {
+}> = ({ task, viewScope, onEdit, onTogglePin, onNavigate }) => {
     const getDueDateInfo = (dateString: string | null, isCompleted: boolean): { color: string, label: string } | null => {
         if (!dateString || isCompleted) return null;
         const today = new Date();
@@ -114,7 +115,15 @@ const TaskItem: React.FC<{
             </span>
           )}
         </div>
-        <div className="absolute top-0 right-0">
+        <div className="absolute top-0 right-0 flex items-center">
+            <button
+                onClick={() => onTogglePin(task.lineIndex)}
+                className={`p-1 rounded-full hover:bg-slate-700 ${task.pinned ? 'text-yellow-400' : 'text-slate-400'} opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100`}
+                aria-label={task.pinned ? "Unpin task" : "Pin task"}
+                title={task.pinned ? "Unpin task" : "Pin task"}
+            >
+                <Pin className={`w-4 h-4 ${task.pinned ? 'fill-current' : ''}`} />
+            </button>
             <button
                 onClick={() => onEdit(task)}
                 className="p-1 rounded-full hover:bg-slate-700 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
@@ -148,7 +157,7 @@ const UserTaskCard: React.FC<{
     onEditTask: (task: Task) => void;
     onNavigate: (projectTitle: string, sectionSlug: string) => void;
 }> = ({ user, tasks, projectTitle, viewScope, onEditTask, onNavigate }) => {
-  const { users, settings, addBulkTaskUpdates } = useProject();
+  const { users, settings, addBulkTaskUpdates, toggleTaskPin } = useProject();
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const completedTasks = tasks.filter(t => t.completed).length;
   const totalTasks = tasks.length;
@@ -242,7 +251,7 @@ const UserTaskCard: React.FC<{
         </div>
         <div className="space-y-3 overflow-y-auto flex-grow">
           {tasks.map((task, index) => (
-            <TaskItem key={index} task={task} viewScope={viewScope} onEdit={onEditTask} onNavigate={onNavigate}/>
+            <TaskItem key={index} task={task} viewScope={viewScope} onEdit={onEditTask} onTogglePin={toggleTaskPin} onNavigate={onNavigate}/>
           ))}
         </div>
       </div>
@@ -281,6 +290,7 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string; 
 
 const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassignedTasks, projectTitle, viewScope, totalCost, onNavigate }) => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const { toggleTaskPin } = useProject();
 
   const handleEditTask = useCallback((task: Task) => {
     setEditingTask(task);
@@ -326,7 +336,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ groupedTasks, unassig
             </div>
             <div className="space-y-3">
               {unassignedTasks.map((task, index) => (
-                <TaskItem key={index} task={task} viewScope={viewScope} onEdit={handleEditTask} onNavigate={onNavigate} />
+                <TaskItem key={index} task={task} viewScope={viewScope} onEdit={handleEditTask} onTogglePin={toggleTaskPin} onNavigate={onNavigate} />
               ))}
             </div>
           </div>

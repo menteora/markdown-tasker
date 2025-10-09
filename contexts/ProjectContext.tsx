@@ -18,7 +18,7 @@ Use H1 headings (e.g., '# My Project') to create separate projects within this f
 
 ## Phase 1: Design
 
-- [ ] Wireframing and user flows !2024-08-10 (@alice) ($1500)
+- [ ] Wireframing and user flows !2024-08-10 (@alice) ($1500) 📌
   - 2024-07-26: Initial sketches completed. (@alice)
   - 2024-07-27: Discussed with the product team, got feedback.
 - [x] UI/UX Design system (@alice) ~2024-07-20 ($2500)
@@ -26,7 +26,7 @@ Use H1 headings (e.g., '# My Project') to create separate projects within this f
 
 ## Phase 2: Development
 
-- [ ] Setup CI/CD pipeline !2024-09-01 (@bob) ($2000)
+- [ ] Setup CI/CD pipeline !2024-09-01 (@bob) ($2000) 📌
 - [ ] Develop core API endpoints !2024-08-25 (@charlie) ($4000)
 - [ ] Frontend component library (@diana) ($3500)
 - [ ] Implement user authentication ($1200)
@@ -90,6 +90,7 @@ interface ProjectContextType {
     archiveProjects: Project[];
     updateSection: (startLine: number, endLine: number, newContent: string, isArchive: boolean) => void;
     toggleTask: (absoluteLineIndex: number, isCompleted: boolean) => void;
+    toggleTaskPin: (absoluteLineIndex: number) => void;
     updateTaskBlock: (absoluteStartLine: number, originalLineCount: number, newContent: string, isArchive: boolean) => void;
     moveSection: (sectionToMove: { startLine: number, endLine: number }, destinationLine: number) => void;
     duplicateSection: (sectionToDuplicate: { startLine: number, endLine: number }, destinationLine: number) => void;
@@ -260,6 +261,24 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
             });
         });
     }, [performAstUpdate]);
+    
+    const toggleTaskPin = useCallback((absoluteLineIndex: number) => {
+        setMarkdown(prev => {
+            const lines = prev.split('\n');
+            if (absoluteLineIndex >= lines.length) return prev;
+            let line = lines[absoluteLineIndex];
+
+            const pinRegex = /\s*📌\s*$/;
+            if (pinRegex.test(line)) {
+                line = line.replace(pinRegex, '');
+            } else {
+                line = line.trimEnd() + ' 📌';
+            }
+
+            lines[absoluteLineIndex] = line;
+            return lines.join('\n');
+        });
+    }, []);
 
     const moveOrDuplicateSection = useCallback((
         sectionLines: { startLine: number; endLine: number },
@@ -604,7 +623,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const value: ProjectContextType = {
         markdown, setMarkdown, archiveMarkdown, users, setUsers, settings, saveSettings,
-        projects, archiveProjects, updateSection, toggleTask, updateTaskBlock, moveSection,
+        projects, archiveProjects, updateSection, toggleTask, toggleTaskPin, updateTaskBlock, moveSection,
         duplicateSection, addBulkTaskUpdates, addUser, updateUser, deleteUser,
         importProject, handleRequestLocalRestore, archiveSection, restoreSection,
         archiveTasks, reorderTask, clearArchive

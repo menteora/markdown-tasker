@@ -18,6 +18,7 @@ export interface Task {
   lineIndex: number;
   text: string;
   completed: boolean;
+  pinned: boolean;
   assigneeAlias: string | null;
   creationDate?: string | null;
   completionDate: string | null;

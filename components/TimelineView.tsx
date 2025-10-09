@@ -1,6 +1,7 @@
+
 import React, { useMemo } from 'react';
 import type { User, Task } from '../types';
-import { CheckCircle2, Circle, AlertTriangle, Calendar, Clock, Inbox, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Circle, AlertTriangle, Calendar, Clock, Inbox, ArrowRight, Pin } from 'lucide-react';
 import { useProject } from '../contexts/ProjectContext';
 import { InlineMarkdown } from '../lib/markdownUtils';
 
@@ -12,9 +13,9 @@ interface TimelineViewProps {
   onNavigate: (projectTitle: string, sectionSlug: string) => void;
 }
 
-const TimelineTaskItem: React.FC<{ task: Task; user: User | null; viewScope: ViewScope; onNavigate: (projectTitle: string, sectionSlug: string) => void; }> = ({ task, user, viewScope, onNavigate }) => {
+const TimelineTaskItem: React.FC<{ task: Task; user: User | null; viewScope: ViewScope; onNavigate: (projectTitle: string, sectionSlug: string) => void; onTogglePin: (lineIndex: number) => void; }> = ({ task, user, viewScope, onNavigate, onTogglePin }) => {
   return (
-    <div className="flex items-start space-x-3 p-3 bg-slate-800/50 rounded-md">
+    <div className="flex items-start space-x-3 p-3 bg-slate-800/50 rounded-md group">
       {task.completed ? (
         <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
       ) : (
@@ -69,13 +70,25 @@ const TimelineTaskItem: React.FC<{ task: Task; user: User | null; viewScope: Vie
             return null;
         })()}
       </div>
-      <span className="text-xs font-mono whitespace-nowrap text-slate-400">{task.dueDate}</span>
+      <div className="flex items-center space-x-2">
+        <span className="text-xs font-mono whitespace-nowrap text-slate-400">{task.dueDate}</span>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+                onClick={() => onTogglePin(task.lineIndex)}
+                className={`p-1 rounded-full hover:bg-slate-700 ${task.pinned ? 'text-yellow-400' : 'text-slate-400'}`}
+                aria-label={task.pinned ? "Unpin task" : "Pin task"}
+                title={task.pinned ? "Unpin task" : "Pin task"}
+            >
+                <Pin className={`w-4 h-4 ${task.pinned ? 'fill-current' : ''}`} />
+            </button>
+        </div>
+      </div>
     </div>
   );
 };
 
 const TimelineSection: React.FC<{ title: string; icon: React.ReactNode; tasks: Task[]; viewScope: ViewScope; onNavigate: (projectTitle: string, sectionSlug: string) => void; }> = ({ title, icon, tasks, viewScope, onNavigate }) => {
-    const { users } = useProject();
+    const { users, toggleTaskPin } = useProject();
     const userByAlias = useMemo(() => new Map(users.map(u => [u.alias, u])), [users]);
     if (tasks.length === 0) return null;
     return (
@@ -93,6 +106,7 @@ const TimelineSection: React.FC<{ title: string; icon: React.ReactNode; tasks: T
                         user={task.assigneeAlias ? userByAlias.get(task.assigneeAlias) ?? null : null}
                         viewScope={viewScope}
                         onNavigate={onNavigate}
+                        onTogglePin={toggleTaskPin}
                     />
                 ))}
             </div>
